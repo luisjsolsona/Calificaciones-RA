@@ -621,13 +621,13 @@ function ImportacionMasiva({ onClose, onDone }) {
                     color:'#0f172a', padding:'8px 12px', fontSize:13, outline:'none',
                     width:'100%', boxSizing:'border-box', cursor:'pointer' }}>
                   <option value=''>-- Sin grupo --</option>
-                  {grupos.map(c => (
-                    <optgroup key={c.id} label={c.codigo + ' — ' + c.nombre}>
-                      {c.grupos.map(g => (
-                        <option key={g.id} value={String(g.id)}>{g.nombre}</option>
-                      ))}
-                    </optgroup>
-                  ))}
+                  {grupos.flatMap(c =>
+                    c.grupos.length > 0
+                      ? c.grupos.map(g => (
+                          <option key={g.id} value={String(g.id)}>{g.nombre} ({c.codigo})</option>
+                        ))
+                      : [<option key={'c'+c.id} value={'c'+c.id}>{c.codigo}</option>]
+                  )}
                 </select>
               </div>
               <div>
