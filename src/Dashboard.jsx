@@ -316,29 +316,85 @@ function NuevoCuadernoForm({ docentes, currentUser, onAdd, onCancel }) {
   );
 }
 
-// ── Gestión de usuarios ────────────────────────────────────────────────────
+// ── Gestión de usuarios ─────────────────────────────────────────────────────
 function UserManager({ onRefresh }) {
-  const [usuarios,  setUsuarios]  = useState([]);
-  const [showForm,  setShowForm]  = useState(false);
-  const [editUser,  setEditUser]  = useState(null);
-  const [form, setForm] = useState({ nombre:"", email:"", usuario:"", password:"", rol:"docente", alumno_nombre:"" });
+  const [usuarios,    setUsuarios]    = useState([]);
+  const [ciclos,      setCiclos]      = useState([]);
+  const [showForm,    setShowForm]    = useState(false);
+  const [editUser,    setEditUser]    = useState(null);
+  const [buscar,      setBuscar]      = useState('');
+  const [filtroRol,   setFiltroRol]   = useState('');
+  const [filtroGrupo, setFiltroGrupo] = useState('');
+  const [form, setForm] = useState({
+    nombre:'', email:'', usuario:'', password:'', rol:'docente', alumno_nombre:'', grupo_id:''
+  });
 
-  useEffect(() => { api.getUsuarios().then(setUsuarios).catch(console.error); }, []);
+  useEffect(() => {
+    api.getUsuarios().then(setUsuarios).catch(console.error);
+    api.getCiclos().then(setCiclos).catch(console.error);
+  }, []);
 
-  const IS = { background:"#fff", border:"1px solid #cbd5e1", borderRadius:8,
-    color:"#0f172a", padding:"7px 10px", fontSize:13, outline:"none",
-    width:"100%", boxSizing:"border-box" };
+  const IS = { background:'#fff', border:'1px solid #cbd5e1', borderRadius:8,
+    color:'#0f172a', padding:'7px 10px', fontSize:13, outline:'none', boxSizing:'border-box' };
 
-  function startAdd()   { setForm({ nombre:"", email:"", usuario:"", password:"", rol:"docente", alumno_nombre:"" }); setEditUser(null); setShowForm(true); }
-  function startEdit(u) { setForm({ nombre:u.nombre, email:u.email, usuario:u.usuario||"", password:"", rol:u.rol, alumno_nombre:u.alumno_nombre||"" }); setEditUser(u); setShowForm(true); }
+  const allGrupos = ciclos.flatMap(c =>
+    c.grupos.length > 0
+      ? c.grupos.map(g => ({ id: g.id, label: g.nombre + ' (' + c.codigo + ')', cicloId: c.id }))
+      : [{ id: 'c' + c.id, label: c.codigo, cicloId: c.id }]
+  );
+
+  // Filtrado de la lista
+  const lista = usuarios.filter(u => {
+    if (filtroRol   && u.rol       !== filtroRol)   return false;
+    if (filtroGrupo) {
+      if (filtroGrupo.startsWith('c')) {
+        const cid   = parseInt(filtroGrupo.slice(1));
+        const ciclo = ciclos.find(c => c.id === cid);
+        if (ciclo && ciclo.grupos.length > 0) {
+          const gids = new Set(ciclo.grupos.map(g => g.id));
+          if (!gids.has(u.grupo_id)) return false;
+        } else if (!ciclo) return false;
+      } else {
+        if (String(u.grupo_id) !== filtroGrupo) return false;
+      }
+    }
+    if (buscar) {
+      const q = buscar.toLowerCase();
+      if (!u.nombre.toLowerCase().includes(q) &&
+          !u.email.toLowerCase().includes(q) &&
+          !(u.usuario||'').toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+
+  function startAdd()   {
+    setForm({ nombre:'', email:'', usuario:'', password:'', rol:'alumno', alumno_nombre:'', grupo_id:'' });
+    setEditUser(null); setShowForm(true);
+  }
+  function startEdit(u) {
+    setForm({
+      nombre: u.nombre, email: u.email, usuario: u.usuario||'',
+      password: '', rol: u.rol, alumno_nombre: u.alumno_nombre||'',
+      grupo_id: u.grupo_id ? String(u.grupo_id) : ''
+    });
+    setEditUser(u); setShowForm(true);
+  }
+  function cancel() { setShowForm(false); setEditUser(null); }
 
   async function submit() {
+    if (!form.nombre.trim() || !form.email.trim()) return;
     try {
+      const payload = {
+        ...form,
+        alumno_nombre: form.rol === 'alumno' ? (form.alumno_nombre || form.nombre) : null,
+        grupo_id: form.grupo_id && !String(form.grupo_id).startsWith('c')
+          ? Number(form.grupo_id) : null,
+      };
       if (editUser) {
-        await api.updateUsuario(editUser.id, form);
+        await api.updateUsuario(editUser.id, payload);
         if (form.password) await api.changePassword(editUser.id, form.password);
       } else {
-        await api.createUsuario(form);
+        await api.createUsuario(payload);
       }
       const fresh = await api.getUsuarios();
       setUsuarios(fresh);
@@ -348,492 +404,174 @@ function UserManager({ onRefresh }) {
   }
 
   async function deleteUser(u) {
-    if (!confirm(`¿Eliminar a ${u.nombre}?`)) return;
+    if (!confirm('Eliminar a ' + u.nombre + '?')) return;
     await api.deleteUsuario(u.id);
     setUsuarios(prev => prev.filter(x => x.id !== u.id));
     if (onRefresh) onRefresh();
   }
 
+  const ROLES = { admin:'Admin', docente:'Docente', alumno:'Alumno' };
+  const ROL_COLOR = { admin:'#dc2626', docente:'#4f46e5', alumno:'#059669' };
+
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-        <h3 style={{ margin:0, fontSize:15, fontWeight:700 }}>👥 Usuarios</h3>
-        <button onClick={startAdd} style={{ background:"#4f46e5", color:"#fff", border:"none",
-          borderRadius:8, padding:"7px 14px", fontSize:13, fontWeight:600, cursor:"pointer" }}>
+    <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+
+      {/* Cabecera + botón nuevo */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <h3 style={{ margin:0, fontSize:15, fontWeight:700 }}>
+          Usuarios <span style={{ fontSize:12, color:'#94a3b8', fontWeight:400 }}>({lista.length}/{usuarios.length})</span>
+        </h3>
+        <button onClick={startAdd} style={{ background:'#4f46e5', color:'#fff', border:'none',
+          borderRadius:8, padding:'7px 14px', fontSize:13, fontWeight:600, cursor:'pointer' }}>
           + Nuevo
         </button>
       </div>
 
+      {/* Filtros */}
+      <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+        <input value={buscar} onChange={e => setBuscar(e.target.value)}
+          placeholder="Buscar por nombre, email o usuario..."
+          style={{ ...IS, flex:1, minWidth:200 }}/>
+        <select value={filtroRol} onChange={e => setFiltroRol(e.target.value)}
+          style={{ ...IS, width:'auto', cursor:'pointer' }}>
+          <option value=''>Todos los roles</option>
+          <option value='admin'>Admin</option>
+          <option value='docente'>Docente</option>
+          <option value='alumno'>Alumno</option>
+        </select>
+        <select value={filtroGrupo} onChange={e => setFiltroGrupo(e.target.value)}
+          style={{ ...IS, width:'auto', cursor:'pointer' }}>
+          <option value=''>Todos los grupos</option>
+          {ciclos.map(c => (
+            c.grupos.length > 0 ? [
+              <option key={'c'+c.id} value={'c'+c.id} style={{ fontWeight:700, color:'#4f46e5' }}>
+                {c.codigo} (todos)
+              </option>,
+              ...c.grupos.map(g => (
+                <option key={g.id} value={String(g.id)}>&nbsp;&nbsp;{g.nombre}</option>
+              ))
+            ] : [
+              <option key={'c'+c.id} value={'c'+c.id}>{c.codigo}</option>
+            ]
+          ))}
+        </select>
+        {(buscar || filtroRol || filtroGrupo) && (
+          <button onClick={() => { setBuscar(''); setFiltroRol(''); setFiltroGrupo(''); }}
+            style={{ ...IS, background:'none', border:'1px solid #fca5a5', color:'#dc2626',
+              cursor:'pointer', width:'auto', padding:'7px 12px' }}>
+            Limpiar
+          </button>
+        )}
+      </div>
+
+      {/* Formulario añadir/editar */}
       {showForm && (
-        <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:12, padding:16,
-          display:"flex", flexDirection:"column", gap:10 }}>
-          <h4 style={{ margin:0, fontSize:13, fontWeight:700 }}>{editUser ? "Editar usuario" : "Nuevo usuario"}</h4>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-            <input value={form.nombre}   onChange={e=>setForm(p=>({...p,nombre:e.target.value}))}   placeholder="Nombre completo"    style={IS}/>
-            <input value={form.email}    onChange={e=>setForm(p=>({...p,email:e.target.value}))}    placeholder="email@centro.es"     style={IS}/>
-            <input value={form.usuario}  onChange={e=>setForm(p=>({...p,usuario:e.target.value}))}  placeholder="usuario (login corto)" style={IS}/>
-            <input type="password" value={form.password} onChange={e=>setForm(p=>({...p,password:e.target.value}))} placeholder={editUser ? "Nueva contraseña (dejar vacío = no cambiar)" : "Contraseña"} style={IS}/>
-            <select value={form.rol} onChange={e=>setForm(p=>({...p,rol:e.target.value}))} style={IS}>
-              <option value="admin">Admin</option>
-              <option value="docente">Docente</option>
-              <option value="alumno">Alumno</option>
+        <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:12,
+          padding:16, display:'flex', flexDirection:'column', gap:10 }}>
+          <h4 style={{ margin:0, fontSize:13, fontWeight:700 }}>
+            {editUser ? 'Editar — ' + editUser.nombre : 'Nuevo usuario'}
+          </h4>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+            <input value={form.nombre}   onChange={e=>setForm(p=>({...p,nombre:e.target.value}))}
+              placeholder="Nombre completo *" style={IS}/>
+            <input value={form.email}    onChange={e=>setForm(p=>({...p,email:e.target.value}))}
+              placeholder="email@centro.es *" style={IS}/>
+            <input value={form.usuario}  onChange={e=>setForm(p=>({...p,usuario:e.target.value}))}
+              placeholder="Usuario (login corto)" style={IS}/>
+            <input type="password" value={form.password}
+              onChange={e=>setForm(p=>({...p,password:e.target.value}))}
+              placeholder={editUser ? 'Nueva contraseña (vacío = no cambiar)' : 'Contraseña *'}
+              style={IS}/>
+            <select value={form.rol} onChange={e=>setForm(p=>({...p,rol:e.target.value}))}
+              style={{ ...IS, cursor:'pointer' }}>
+              <option value='admin'>Admin</option>
+              <option value='docente'>Docente</option>
+              <option value='alumno'>Alumno</option>
             </select>
-            {form.rol === "alumno" && (
-              <input value={form.alumno_nombre} onChange={e=>setForm(p=>({...p,alumno_nombre:e.target.value}))}
-                placeholder="Nombre en cuaderno (Apellido, Nombre)" style={IS}/>
+            <select value={form.grupo_id} onChange={e=>setForm(p=>({...p,grupo_id:e.target.value}))}
+              style={{ ...IS, cursor:'pointer' }}>
+              <option value=''>Sin grupo</option>
+              {allGrupos.map(g => (
+                <option key={g.id} value={String(g.id)}>{g.label}</option>
+              ))}
+            </select>
+            {form.rol === 'alumno' && (
+              <input style={{ ...IS, gridColumn:'1/-1' }} value={form.alumno_nombre}
+                onChange={e=>setForm(p=>({...p,alumno_nombre:e.target.value}))}
+                placeholder="Nombre en cuaderno (Apellido, Nombre) — vacío usa el nombre completo"/>
             )}
           </div>
-          <div style={{ display:"flex", gap:8 }}>
-            <button onClick={submit} style={{ background:"#4f46e5", color:"#fff", border:"none",
-              borderRadius:8, padding:"8px 18px", fontSize:13, fontWeight:600, cursor:"pointer" }}>
-              {editUser ? "Guardar" : "Crear"}
+          <div style={{ display:'flex', gap:8 }}>
+            <button onClick={submit} style={{ background:'#4f46e5', color:'#fff', border:'none',
+              borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600, cursor:'pointer' }}>
+              {editUser ? 'Guardar cambios' : 'Crear usuario'}
             </button>
-            <button onClick={() => { setShowForm(false); setEditUser(null); }} style={{
-              background:"none", border:"1px solid #e2e8f0", borderRadius:8,
-              padding:"8px 14px", fontSize:13, color:"#64748b", cursor:"pointer" }}>
+            <button onClick={cancel} style={{ background:'none', border:'1px solid #e2e8f0',
+              borderRadius:8, padding:'8px 14px', fontSize:13, color:'#64748b', cursor:'pointer' }}>
               Cancelar
             </button>
           </div>
         </div>
       )}
 
-      <div style={{ borderRadius:10, overflow:"hidden", border:"1px solid #e2e8f0" }}>
-        <table style={{ width:"100%", borderCollapse:"collapse" }}>
+      {/* Tabla */}
+      <div style={{ borderRadius:10, overflow:'auto', border:'1px solid #e2e8f0' }}>
+        <table style={{ width:'100%', borderCollapse:'collapse', minWidth:600 }}>
           <thead>
-            <tr style={{ background:"#f1f5f9" }}>
-              {["Nombre","Email/Usuario","Rol","Nombre en cuaderno",""].map(h=>(
-                <th key={h} style={{ padding:"8px 12px", fontSize:11, fontWeight:600,
-                  textTransform:"uppercase", letterSpacing:.6, color:"#475569",
-                  textAlign:"left", borderBottom:"1px solid #e2e8f0" }}>{h}</th>
+            <tr style={{ background:'#f1f5f9' }}>
+              {['Nombre','Email / Usuario','Rol','Grupo','Nombre en cuaderno',''].map(h => (
+                <th key={h} style={{ padding:'8px 12px', fontSize:11, fontWeight:600,
+                  textTransform:'uppercase', letterSpacing:.6, color:'#475569',
+                  textAlign:'left', borderBottom:'1px solid #e2e8f0', whiteSpace:'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {usuarios.map((u,i)=>(
-              <tr key={u.id} style={{ background:i%2===0?"#fff":"#f8fafc" }}>
-                <td style={{ padding:"9px 12px", fontSize:13, fontWeight:500 }}>{u.nombre}</td>
-                <td style={{ padding:"9px 12px", fontSize:12, color:"#64748b" }}>
-                  {u.email}{u.usuario && <span style={{ color:"#94a3b8" }}> · @{u.usuario}</span>}
-                </td>
-                <td style={{ padding:"9px 12px" }}><RoleBadge rol={u.rol}/></td>
-                <td style={{ padding:"9px 12px", fontSize:12, color:"#64748b" }}>{u.alumno_nombre||"—"}</td>
-                <td style={{ padding:"9px 12px", whiteSpace:"nowrap" }}>
-                  <button onClick={()=>startEdit(u)} style={{ fontSize:12, color:"#4f46e5", background:"none", border:"none", cursor:"pointer", marginRight:8 }}>✏ Editar</button>
-                  <button onClick={()=>deleteUser(u)} style={{ fontSize:12, color:"#dc2626", background:"none", border:"none", cursor:"pointer" }}>✕</button>
-                </td>
-              </tr>
-            ))}
+            {lista.length === 0
+              ? <tr><td colSpan={6} style={{ padding:32, textAlign:'center', color:'#94a3b8', fontSize:13 }}>
+                  Sin resultados
+                </td></tr>
+              : lista.map((u, i) => (
+                <tr key={u.id} style={{ background: i%2===0 ? '#fff' : '#f8fafc' }}>
+                  <td style={{ padding:'9px 12px', fontSize:13, fontWeight:500, color:'#0f172a' }}>
+                    {u.nombre}
+                  </td>
+                  <td style={{ padding:'9px 12px', fontSize:12, color:'#64748b' }}>
+                    {u.email}
+                    {u.usuario && <span style={{ color:'#94a3b8' }}> · @{u.usuario}</span>}
+                  </td>
+                  <td style={{ padding:'9px 12px' }}>
+                    <span style={{ fontSize:11, fontWeight:700, color:ROL_COLOR[u.rol],
+                      background:ROL_COLOR[u.rol]+'18', border:'1px solid '+ROL_COLOR[u.rol]+'44',
+                      borderRadius:99, padding:'2px 8px' }}>
+                      {ROLES[u.rol]}
+                    </span>
+                  </td>
+                  <td style={{ padding:'9px 12px', fontSize:12 }}>
+                    {u.grupo_nombre
+                      ? <span style={{ background:'#eef2ff', color:'#4f46e5', border:'1px solid #c7d2fe',
+                          borderRadius:6, padding:'2px 8px', fontSize:11 }}>{u.grupo_nombre}</span>
+                      : <span style={{ color:'#cbd5e1' }}>—</span>}
+                  </td>
+                  <td style={{ padding:'9px 12px', fontSize:12, color:'#64748b' }}>
+                    {u.alumno_nombre || <span style={{ color:'#cbd5e1' }}>—</span>}
+                  </td>
+                  <td style={{ padding:'9px 12px', whiteSpace:'nowrap' }}>
+                    <button onClick={() => startEdit(u)}
+                      style={{ fontSize:12, color:'#4f46e5', background:'none', border:'none',
+                        cursor:'pointer', marginRight:8 }}>
+                      Editar
+                    </button>
+                    <button onClick={() => deleteUser(u)}
+                      style={{ fontSize:12, color:'#dc2626', background:'none', border:'none', cursor:'pointer' }}>
+                      Eliminar
+                    </button>
+                  </td>
+                </tr>
+              ))
+            }
           </tbody>
         </table>
-      </div>
-    </div>
-  );
-}
-
-
-
-// ── Gestión de Ciclos y Grupos ────────────────────────────────────────────
-function CiclosManager({ onCiclosChange }) {
-  const [ciclos,    setCiclos]    = useState([]);
-  const [newCiclo,  setNewCiclo]  = useState({ nombre:'', codigo:'' });
-  const [newGrupo,  setNewGrupo]  = useState({});  // { [cicloId]: nombre }
-
-  useEffect(() => { api.getCiclos().then(setCiclos).catch(console.error); }, []);
-
-  const IS = { background:'#fff', border:'1px solid #cbd5e1', borderRadius:8,
-    color:'#0f172a', padding:'7px 10px', fontSize:13, outline:'none', boxSizing:'border-box' };
-
-  async function addCiclo() {
-    if (!newCiclo.nombre.trim() || !newCiclo.codigo.trim()) return;
-    try {
-      const c = await api.createCiclo(newCiclo);
-      const lista = [...ciclos, c];
-      setCiclos(lista);
-      setNewCiclo({ nombre:'', codigo:'' });
-      if (onCiclosChange) onCiclosChange(lista);
-    } catch(e) { alert(e.message); }
-  }
-
-  async function delCiclo(id) {
-    if (!confirm('Eliminar ciclo y todos sus grupos?')) return;
-    await api.deleteCiclo(id);
-    const lista = ciclos.filter(c => c.id !== id);
-    setCiclos(lista);
-    if (onCiclosChange) onCiclosChange(lista);
-  }
-
-  async function addGrupo(cicloId) {
-    const nombre = (newGrupo[cicloId] || '').trim();
-    if (!nombre) return;
-    try {
-      const g = await api.createGrupo(cicloId, { nombre });
-      const lista = ciclos.map(c => c.id === cicloId ? { ...c, grupos: [...c.grupos, g] } : c);
-      setCiclos(lista);
-      setNewGrupo(prev => ({ ...prev, [cicloId]: '' }));
-      if (onCiclosChange) onCiclosChange(lista);
-    } catch(e) { alert(e.message); }
-  }
-
-  async function delGrupo(cicloId, grupoId) {
-    await api.deleteGrupo(grupoId);
-    const lista = ciclos.map(c => c.id === cicloId ? { ...c, grupos: c.grupos.filter(g => g.id !== grupoId) } : c);
-    setCiclos(lista);
-    if (onCiclosChange) onCiclosChange(lista);
-  }
-
-  return (
-    <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-        <h3 style={{ margin:0, fontSize:15, fontWeight:700 }}>Ciclos y Grupos</h3>
-      </div>
-
-      {/* Añadir ciclo */}
-      <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-        <input value={newCiclo.codigo} onChange={e=>setNewCiclo(p=>({...p,codigo:e.target.value}))}
-          placeholder="COD (SMR, IFC...)" style={{ ...IS, width:120 }}/>
-        <input value={newCiclo.nombre} onChange={e=>setNewCiclo(p=>({...p,nombre:e.target.value}))}
-          onKeyDown={e=>e.key==='Enter'&&addCiclo()}
-          placeholder="Nombre del ciclo" style={{ ...IS, flex:1 }}/>
-        <button onClick={addCiclo} style={{ background:'#4f46e5', color:'#fff', border:'none',
-          borderRadius:8, padding:'8px 16px', fontSize:13, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap' }}>
-          + Ciclo
-        </button>
-      </div>
-
-      {ciclos.length === 0
-        ? <p style={{ color:'#94a3b8', fontSize:13 }}>No hay ciclos. Crea el primero.</p>
-        : ciclos.map(ciclo => (
-          <div key={ciclo.id} style={{ border:'1px solid #e2e8f0', borderRadius:10, overflow:'hidden' }}>
-            {/* Cabecera ciclo */}
-            <div style={{ background:'#f1f5f9', padding:'10px 14px', display:'flex', alignItems:'center', gap:10 }}>
-              <span style={{ background:'#4f46e5', color:'#fff', borderRadius:6,
-                padding:'2px 10px', fontWeight:800, fontSize:13 }}>{ciclo.codigo}</span>
-              <span style={{ flex:1, fontWeight:600, fontSize:14, color:'#0f172a' }}>{ciclo.nombre}</span>
-              <span style={{ fontSize:12, color:'#94a3b8' }}>{ciclo.grupos.length} grupos</span>
-              <button onClick={()=>delCiclo(ciclo.id)} style={{ background:'none', border:'1px solid #fca5a5',
-                borderRadius:6, color:'#dc2626', padding:'3px 10px', fontSize:12, cursor:'pointer' }}>✕ Eliminar</button>
-            </div>
-            {/* Grupos */}
-            <div style={{ padding:'10px 14px', display:'flex', flexWrap:'wrap', gap:8, alignItems:'center' }}>
-              {ciclo.grupos.map(g => (
-                <span key={g.id} style={{ background:'#eef2ff', color:'#4f46e5', border:'1px solid #c7d2fe',
-                  borderRadius:20, padding:'4px 12px', fontSize:13, display:'flex', alignItems:'center', gap:6 }}>
-                  {g.nombre}
-                  <button onClick={()=>delGrupo(ciclo.id,g.id)} style={{ background:'none', border:'none',
-                    color:'#94a3b8', cursor:'pointer', padding:0, fontSize:12, lineHeight:1 }}>✕</button>
-                </span>
-              ))}
-              <div style={{ display:'flex', gap:6 }}>
-                <input value={newGrupo[ciclo.id]||''} placeholder="Nuevo grupo..."
-                  onChange={e=>setNewGrupo(p=>({...p,[ciclo.id]:e.target.value}))}
-                  onKeyDown={e=>e.key==='Enter'&&addGrupo(ciclo.id)}
-                  style={{ ...IS, width:140, padding:'4px 8px', fontSize:12 }}/>
-                <button onClick={()=>addGrupo(ciclo.id)} style={{ background:'#e0e7ff', color:'#4f46e5',
-                  border:'1px solid #c7d2fe', borderRadius:7, padding:'4px 12px', fontSize:12, cursor:'pointer' }}>+ Grupo</button>
-              </div>
-            </div>
-          </div>
-        ))
-      }
-    </div>
-  );
-}
-
-// ── Importación masiva de usuarios ────────────────────────────────────────
-function normalizar(str) {
-  return str.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
-}
-
-function generarUsuario(nombre) {
-  // "García López, Ana" o "Ana García López" → "ana.garcia"
-  const limpio  = nombre.replace(',', ' ').trim();
-  const partes  = limpio.split(/\s+/).filter(Boolean);
-  if (partes.length === 0) return 'usuario';
-  if (partes.length === 1) return normalizar(partes[0]);
-  // Formato "Apellido Apellido, Nombre" → el último token antes de la coma es el nombre
-  const coma = nombre.indexOf(',');
-  if (coma > -1) {
-    const nombre1 = nombre.slice(coma + 1).trim().split(/\s+/)[0];
-    const apell1  = nombre.slice(0, coma).trim().split(/\s+/)[0];
-    return normalizar(nombre1) + '.' + normalizar(apell1);
-  }
-  // Sin coma: primer token = nombre, segundo = primer apellido
-  return normalizar(partes[0]) + '.' + normalizar(partes[1]);
-}
-
-function ImportacionMasiva({ onClose, onDone }) {
-  const [grupos,   setGrupos]   = useState([]);
-  const [grupoId,  setGrupoId]  = useState('');
-  const [texto,    setTexto]    = useState('');
-  const [rol,      setRol]      = useState('alumno');
-  const [dominio,  setDominio]  = useState('@centro.es');
-  const [password, setPassword] = useState('cambiar1234');
-  const [preview,  setPreview]  = useState([]);
-  const [resultado,setResultado]= useState(null);
-  const [loading,  setLoading]  = useState(false);
-  const [paso,     setPaso]     = useState(1); // 1=entrada, 2=preview, 3=resultado
-
-  useEffect(() => { api.getCiclos().then(setGrupos).catch(()=>{}); }, []);
-  const allGrupos = grupos.flatMap(c => c.grupos.map(g => ({ ...g, ciclo: c.codigo })));
-
-  const IS = { background:'#fff', border:'1px solid #cbd5e1', borderRadius:8,
-    color:'#0f172a', padding:'8px 12px', fontSize:13, outline:'none',
-    width:'100%', boxSizing:'border-box' };
-
-  function parsear() {
-    const lineas = texto.split('\n').map(l => l.trim()).filter(Boolean);
-    const lista = lineas.map((linea, i) => {
-      // Formato flexible: nombre [| usuario] [| email]
-      const partes = linea.split('|').map(p => p.trim());
-      const nombre  = partes[0] || `Usuario ${i+1}`;
-      const usuario = partes[1] || generarUsuario(nombre);
-      const email   = partes[2] || (usuario + dominio);
-      const alumno_nombre = rol === 'alumno' ? nombre : null;
-      const gid = grupoId && !String(grupoId).startsWith('c') ? Number(grupoId) : null;
-      return { nombre, usuario, email, rol, password, alumno_nombre, grupo_id: gid, _idx: i };
-    });
-    setPreview(lista);
-    setPaso(2);
-  }
-
-  function editarFila(idx, campo, valor) {
-    setPreview(prev => prev.map(u => u._idx === idx ? { ...u, [campo]: valor } : u));
-  }
-  function eliminarFila(idx) {
-    setPreview(prev => prev.filter(u => u._idx !== idx));
-  }
-
-  async function crear() {
-    setLoading(true);
-    const res = [];
-    for (const u of preview) {
-      try {
-        await api.createUsuario(u);
-        res.push({ ...u, ok: true });
-      } catch(e) {
-        res.push({ ...u, ok: false, error: e.message });
-      }
-    }
-    setResultado(res);
-    setPaso(3);
-    setLoading(false);
-    onDone();
-  }
-
-  const creados  = resultado?.filter(r => r.ok).length  || 0;
-  const errores  = resultado?.filter(r => !r.ok).length || 0;
-
-  return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)',
-      display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:16 }}>
-      <div style={{ background:'#fff', borderRadius:16, width:'100%', maxWidth:700,
-        maxHeight:'90vh', display:'flex', flexDirection:'column',
-        boxShadow:'0 20px 60px rgba(0,0,0,0.2)' }}>
-
-        {/* Header */}
-        <div style={{ padding:'18px 24px', borderBottom:'1px solid #e2e8f0',
-          display:'flex', alignItems:'center', gap:12 }}>
-          <div style={{ flex:1 }}>
-            <h2 style={{ margin:0, fontSize:16, fontWeight:700, color:'#0f172a' }}>
-              Importacion masiva de usuarios
-            </h2>
-            <p style={{ margin:0, fontSize:12, color:'#64748b' }}>
-              {paso === 1 && 'Paso 1: Pega los nombres y configura opciones'}
-              {paso === 2 && `Paso 2: Revisa los ${preview.length} usuarios antes de crear`}
-              {paso === 3 && `Paso 3: Resultado — ${creados} creados, ${errores} errores`}
-            </p>
-          </div>
-          <button onClick={onClose} style={{ background:'none', border:'1px solid #e2e8f0',
-            borderRadius:8, padding:'6px 12px', cursor:'pointer', color:'#64748b' }}>X</button>
-        </div>
-
-        <div style={{ padding:'20px 24px', flex:1, overflowY:'auto', display:'flex', flexDirection:'column', gap:16 }}>
-
-          {/* ── PASO 1: Entrada ── */}
-          {paso === 1 && <>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-              <div>
-                <label style={{ fontSize:12, color:'#64748b', display:'block', marginBottom:4 }}>Rol para todos</label>
-                <select value={rol} onChange={e => setRol(e.target.value)} style={IS}>
-                  <option value="alumno">Alumno</option>
-                  <option value="docente">Docente</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize:12, color:'#64748b', display:'block', marginBottom:4 }}>Grupo (opcional)</label>
-                <select
-                  value={grupoId}
-                  onChange={e => setGrupoId(e.target.value)}
-                  style={{ background:'#fff', border:'1px solid #cbd5e1', borderRadius:8,
-                    color:'#0f172a', padding:'8px 12px', fontSize:13, outline:'none',
-                    width:'100%', boxSizing:'border-box', cursor:'pointer' }}>
-                  <option value=''>-- Sin grupo --</option>
-                  {grupos.flatMap(c =>
-                    c.grupos.length > 0
-                      ? c.grupos.map(g => (
-                          <option key={g.id} value={String(g.id)}>{g.nombre} ({c.codigo})</option>
-                        ))
-                      : [<option key={'c'+c.id} value={'c'+c.id}>{c.codigo}</option>]
-                  )}
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize:12, color:'#64748b', display:'block', marginBottom:4 }}>Dominio email</label>
-                <input value={dominio} onChange={e => setDominio(e.target.value)}
-                  placeholder="@centro.es" style={IS}/>
-              </div>
-              <div>
-                <label style={{ fontSize:12, color:'#64748b', display:'block', marginBottom:4 }}>Contrasena inicial</label>
-                <input value={password} onChange={e => setPassword(e.target.value)}
-                  placeholder="cambiar1234" style={IS}/>
-              </div>
-            </div>
-
-            <div>
-              <label style={{ fontSize:12, color:'#64748b', display:'block', marginBottom:6 }}>
-                Nombres (uno por linea)
-              </label>
-              <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:8,
-                padding:'10px 12px', fontSize:11, color:'#94a3b8', marginBottom:8 }}>
-                Formatos aceptados:<br/>
-                <code style={{ color:'#4f46e5' }}>Garcia Lopez, Ana</code> — solo nombre (usuario y email se generan)<br/>
-                <code style={{ color:'#4f46e5' }}>Garcia Lopez, Ana | ana.garcia</code> — con usuario<br/>
-                <code style={{ color:'#4f46e5' }}>Garcia Lopez, Ana | ana.garcia | ana@ies.es</code> — completo
-              </div>
-              <textarea
-                value={texto}
-                onChange={e => setTexto(e.target.value)}
-                placeholder={"Garcia Lopez, Ana\nMartinez Ruiz, Carlos\nSanchez Perez, Elena\nRodriguez Gomez, Luis | luis.rodriguez | luis@ies.es"}
-                rows={12}
-                style={{ ...IS, fontFamily:'monospace', fontSize:13, resize:'vertical', lineHeight:1.6 }}
-              />
-              <div style={{ fontSize:12, color:'#94a3b8', marginTop:4 }}>
-                {texto.split('\n').filter(l => l.trim()).length} lineas
-              </div>
-            </div>
-
-            <div style={{ display:'flex', gap:8 }}>
-              <button onClick={parsear}
-                disabled={!texto.trim()}
-                style={{ background: texto.trim() ? '#4f46e5' : '#94a3b8', color:'#fff',
-                  border:'none', borderRadius:8, padding:'10px 24px',
-                  fontSize:14, fontWeight:600, cursor: texto.trim() ? 'pointer' : 'not-allowed' }}>
-                Previsualizar →
-              </button>
-              <button onClick={onClose} style={{ background:'none', border:'1px solid #e2e8f0',
-                borderRadius:8, padding:'10px 16px', fontSize:13, color:'#64748b', cursor:'pointer' }}>
-                Cancelar
-              </button>
-            </div>
-          </>}
-
-          {/* ── PASO 2: Preview ── */}
-          {paso === 2 && <>
-            <div style={{ borderRadius:10, overflow:'auto', border:'1px solid #e2e8f0' }}>
-              <table style={{ width:'100%', borderCollapse:'collapse', minWidth:500 }}>
-                <thead>
-                  <tr style={{ background:'#f1f5f9' }}>
-                    {['Nombre completo','Usuario','Email','Rol',''].map(h => (
-                      <th key={h} style={{ padding:'8px 12px', fontSize:11, fontWeight:600,
-                        textTransform:'uppercase', letterSpacing:.6, color:'#475569',
-                        textAlign:'left', borderBottom:'1px solid #e2e8f0', whiteSpace:'nowrap' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {preview.map((u, i) => (
-                    <tr key={u._idx} style={{ background: i%2===0 ? '#fff' : '#f8fafc' }}>
-                      <td style={{ padding:'6px 12px' }}>
-                        <input value={u.nombre} onChange={e => editarFila(u._idx,'nombre',e.target.value)}
-                          style={{ border:'none', background:'transparent', fontSize:13,
-                            color:'#0f172a', width:'100%', outline:'none' }}/>
-                      </td>
-                      <td style={{ padding:'6px 12px' }}>
-                        <input value={u.usuario} onChange={e => editarFila(u._idx,'usuario',e.target.value)}
-                          style={{ border:'none', background:'transparent', fontSize:12,
-                            color:'#64748b', fontFamily:'monospace', width:'100%', outline:'none' }}/>
-                      </td>
-                      <td style={{ padding:'6px 12px' }}>
-                        <input value={u.email} onChange={e => editarFila(u._idx,'email',e.target.value)}
-                          style={{ border:'none', background:'transparent', fontSize:12,
-                            color:'#64748b', width:'100%', outline:'none' }}/>
-                      </td>
-                      <td style={{ padding:'6px 12px' }}>
-                        <select value={u.rol} onChange={e => editarFila(u._idx,'rol',e.target.value)}
-                          style={{ border:'none', background:'transparent', fontSize:12,
-                            color:'#475569', cursor:'pointer' }}>
-                          <option value="alumno">Alumno</option>
-                          <option value="docente">Docente</option>
-                          <option value="admin">Admin</option>
-                        </select>
-                      </td>
-                      <td style={{ padding:'6px 8px' }}>
-                        <button onClick={() => eliminarFila(u._idx)}
-                          style={{ background:'none', border:'none', color:'#dc2626',
-                            fontSize:14, cursor:'pointer', padding:'2px 6px' }}>✕</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-              <button onClick={crear} disabled={loading || preview.length === 0}
-                style={{ background: preview.length ? '#059669' : '#94a3b8', color:'#fff',
-                  border:'none', borderRadius:8, padding:'10px 24px',
-                  fontSize:14, fontWeight:600, cursor: preview.length ? 'pointer' : 'not-allowed' }}>
-                {loading ? 'Creando...' : `Crear ${preview.length} usuarios`}
-              </button>
-              <button onClick={() => setPaso(1)} style={{ background:'none', border:'1px solid #e2e8f0',
-                borderRadius:8, padding:'10px 16px', fontSize:13, color:'#64748b', cursor:'pointer' }}>
-                Atras
-              </button>
-              <span style={{ fontSize:12, color:'#94a3b8', marginLeft:'auto' }}>
-                Contrasena inicial: <code style={{ color:'#4f46e5' }}>{password}</code>
-              </span>
-            </div>
-          </>}
-
-          {/* ── PASO 3: Resultado ── */}
-          {paso === 3 && <>
-            <div style={{ display:'flex', gap:12, marginBottom:8 }}>
-              <div style={{ flex:1, background:'#f0fdf4', border:'1px solid #bbf7d0',
-                borderRadius:10, padding:'14px 18px', textAlign:'center' }}>
-                <div style={{ fontSize:28, fontWeight:800, color:'#059669' }}>{creados}</div>
-                <div style={{ fontSize:13, color:'#065f46' }}>creados correctamente</div>
-              </div>
-              {errores > 0 && (
-                <div style={{ flex:1, background:'#fef2f2', border:'1px solid #fecaca',
-                  borderRadius:10, padding:'14px 18px', textAlign:'center' }}>
-                  <div style={{ fontSize:28, fontWeight:800, color:'#dc2626' }}>{errores}</div>
-                  <div style={{ fontSize:13, color:'#991b1b' }}>errores (ya existian o email duplicado)</div>
-                </div>
-              )}
-            </div>
-
-            {errores > 0 && (
-              <div style={{ borderRadius:8, overflow:'hidden', border:'1px solid #fecaca' }}>
-                {resultado.filter(r => !r.ok).map((r, i) => (
-                  <div key={i} style={{ padding:'8px 14px', background:i%2===0?'#fef2f2':'#fff5f5',
-                    fontSize:13, display:'flex', gap:12 }}>
-                    <span style={{ color:'#dc2626' }}>✕</span>
-                    <span style={{ color:'#0f172a', flex:1 }}>{r.nombre}</span>
-                    <span style={{ color:'#94a3b8' }}>{r.error}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <button onClick={onClose} style={{ background:'#4f46e5', color:'#fff',
-              border:'none', borderRadius:8, padding:'10px 24px',
-              fontSize:14, fontWeight:600, cursor:'pointer', alignSelf:'flex-start' }}>
-              Cerrar
-            </button>
-          </>}
-
-        </div>
       </div>
     </div>
   );
