@@ -898,6 +898,25 @@ export default function CuadernoCalificaciones({
       return prev.map(a=>map.has(a.id)?{...a,peso:map.get(a.id)}:a);
     });
   }
+  function igualarTodosPesos() {
+    setActividades(prev => {
+      // Agrupar por RA primario + tipo
+      const grupos = {};
+      prev.forEach(a => {
+        const key = `${a.ras[0]||"_"}|${a.tipo}`;
+        if (!grupos[key]) grupos[key] = [];
+        grupos[key].push(a);
+      });
+      const map = new Map();
+      Object.values(grupos).forEach(grupo => {
+        const count = grupo.length;
+        const base  = Math.floor(100/count);
+        const rem   = 100 - base*count;
+        grupo.forEach((a,i) => map.set(a.id, base+(i<rem?1:0)));
+      });
+      return prev.map(a => map.has(a.id) ? {...a, peso:map.get(a.id)} : a);
+    });
+  }
   function updateActividad(id, fields) { setActividades(prev=>prev.map(a=>a.id===id?{...a,...fields}:a)); }
   function removeRA(raId) {
     setRAs(prev=>prev.filter(r=>r.id!==raId));
@@ -1239,6 +1258,11 @@ export default function CuadernoCalificaciones({
           </div>
         )}
         <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+          <button onClick={igualarTodosPesos}
+            title="Distribuir pesos proporcionalmente en todos los grupos (actividades y exámenes de cada RA)"
+            style={{ ...OB, color:"#4f46e5", borderColor:"#c7d2fe", fontWeight:600 }}>
+            ⟳ Igualar todos los pesos
+          </button>
           <button onClick={()=>downloadJSON(actividades,"actividades")} style={OB}>↓ Exportar</button>
           <button onClick={()=>setShowImportActs(v=>!v)} style={showImportActs?BS:OB}>↑ Importar</button>
         </div>
