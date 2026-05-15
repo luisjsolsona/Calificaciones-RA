@@ -655,17 +655,17 @@ export default function CuadernoCalificaciones() {
               <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
                 <span style={{ background:"#4f46e5", color:"#fff", borderRadius:6, padding:"2px 10px", fontWeight:700, fontSize:13, flexShrink:0 }}>{ra.id}</span>
                 <div style={{ flex:1, display:"flex", flexDirection:"column", gap:6 }}>
-                  <input value={ra.titulo} placeholder="Título *"
-                    onChange={e=>setRAs(prev=>prev.map(r=>r.id===ra.id?{...r,titulo:e.target.value}:r))}
+                  <input defaultValue={ra.titulo} placeholder="Título *"
+                    onBlur={e=>setRAs(prev=>prev.map(r=>r.id===ra.id?{...r,titulo:e.target.value}:r))}
                     style={{ ...IS, border:!ra.titulo?"1px solid #fca5a5":IS.border }}/>
-                  <input value={ra.descripcion} placeholder="Descripción"
-                    onChange={e=>setRAs(prev=>prev.map(r=>r.id===ra.id?{...r,descripcion:e.target.value}:r))}
+                  <input defaultValue={ra.descripcion} placeholder="Descripción"
+                    onBlur={e=>setRAs(prev=>prev.map(r=>r.id===ra.id?{...r,descripcion:e.target.value}:r))}
                     style={{ ...IS, fontSize:12 }}/>
                 </div>
                 <div style={{ textAlign:"center", flexShrink:0 }}>
                   <label style={{ color:"#64748b", fontSize:11, display:"block", marginBottom:4 }}>Peso RA (%)</label>
-                  <input type="number" min={0} max={100} value={ra.peso??""} placeholder="Auto"
-                    onChange={e=>setRAs(prev=>prev.map(r=>r.id===ra.id?{...r,peso:e.target.value===""?null:e.target.value}:r))}
+                  <input type="number" min={0} max={100} defaultValue={ra.peso??""} placeholder="Auto"
+                    onBlur={e=>setRAs(prev=>prev.map(r=>r.id===ra.id?{...r,peso:e.target.value===""?null:e.target.value}:r))}
                     style={{ ...IS, width:72, textAlign:"center" }}/>
                   <div style={{ color:"#4f46e5", fontSize:11, marginTop:4 }}>{(pesosPct[ra.id]*100).toFixed(1)}%</div>
                 </div>
@@ -678,14 +678,14 @@ export default function CuadernoCalificaciones() {
                 <span style={{ color:"#64748b", fontSize:12 }}>Ponderación nota RA:</span>
                 <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                   <span style={{ color:"#0891b2", fontSize:12 }}>📋 Actividades</span>
-                  <input type="number" min={0} max={100} value={ra.pctAct??40} onChange={e=>updatePct(ra.id,"pctAct",e.target.value)}
+                  <input type="number" min={0} max={100} defaultValue={ra.pctAct??40} onBlur={e=>updatePct(ra.id,"pctAct",e.target.value)}
                     style={{ ...IS, width:58, padding:"4px 8px", textAlign:"center" }}/>
                   <span style={{ color:"#64748b", fontSize:12 }}>%</span>
                 </div>
                 <span style={{ color:"#cbd5e1" }}>+</span>
                 <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                   <span style={{ color:"#7c3aed", fontSize:12 }}>📄 Exámenes</span>
-                  <input type="number" min={0} max={100} value={ra.pctExam??60} onChange={e=>updatePct(ra.id,"pctExam",e.target.value)}
+                  <input type="number" min={0} max={100} defaultValue={ra.pctExam??60} onBlur={e=>updatePct(ra.id,"pctExam",e.target.value)}
                     style={{ ...IS, width:58, padding:"4px 8px", textAlign:"center" }}/>
                   <span style={{ color:"#64748b", fontSize:12 }}>%</span>
                 </div>
@@ -752,9 +752,11 @@ export default function CuadernoCalificaciones() {
               <div key={ud.id} style={{ display:"flex", gap:10, alignItems:"center", background:inc?"#fef2f2":"#fff", border:`1px solid ${inc?"#fca5a5":"#e2e8f0"}`, borderRadius:10, padding:"10px 12px" }}>
                 <span style={{ color:"#4f46e5", fontWeight:700, fontSize:13, flexShrink:0 }}>{ud.id}</span>
                 {inc && <span style={{ color:"#dc2626", fontSize:11, flexShrink:0 }}>⚠ {prob.join(" · ")}</span>}
-                <input value={ud.titulo} onChange={e=>setUDs(prev=>prev.map(u=>u.id===ud.id?{...u,titulo:e.target.value}:u))}
+                <input defaultValue={ud.titulo}
+                  onBlur={e=>setUDs(prev=>prev.map(u=>u.id===ud.id?{...u,titulo:e.target.value}:u))}
                   placeholder="Título *" style={{ ...IS, flex:1, border:!ud.titulo?"1px solid #fca5a5":IS.border }}/>
-                <input value={ud.descripcion} onChange={e=>setUDs(prev=>prev.map(u=>u.id===ud.id?{...u,descripcion:e.target.value}:u))}
+                <input defaultValue={ud.descripcion}
+                  onBlur={e=>setUDs(prev=>prev.map(u=>u.id===ud.id?{...u,descripcion:e.target.value}:u))}
                   placeholder="Descripción" style={{ ...IS, flex:2, fontSize:12 }}/>
                 <button onClick={()=>removeUD(ud.id)} style={DB}>✕</button>
               </div>
