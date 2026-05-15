@@ -578,6 +578,364 @@ function UserManager({ onRefresh }) {
 }
 
 // ── Dashboard principal ────────────────────────────────────────────────────
+
+// ── Gestión de Ciclos y Grupos ────────────────────────────────────────────
+function CiclosManager({ onCiclosChange }) {
+  const [ciclos,    setCiclos]    = useState([]);
+  const [newCiclo,  setNewCiclo]  = useState({ nombre:'', codigo:'' });
+  const [newGrupo,  setNewGrupo]  = useState({});
+
+  useEffect(() => { api.getCiclos().then(setCiclos).catch(console.error); }, []);
+
+  const IS = { background:'#fff', border:'1px solid #cbd5e1', borderRadius:8,
+    color:'#0f172a', padding:'7px 10px', fontSize:13, outline:'none', boxSizing:'border-box' };
+
+  async function addCiclo() {
+    if (!newCiclo.nombre.trim() || !newCiclo.codigo.trim()) return;
+    try {
+      const c = await api.createCiclo(newCiclo);
+      const lista = [...ciclos, c];
+      setCiclos(lista);
+      setNewCiclo({ nombre:'', codigo:'' });
+      if (onCiclosChange) onCiclosChange(lista);
+    } catch(e) { alert(e.message); }
+  }
+
+  async function delCiclo(id) {
+    if (!confirm('Eliminar ciclo y todos sus grupos?')) return;
+    await api.deleteCiclo(id);
+    const lista = ciclos.filter(c => c.id !== id);
+    setCiclos(lista);
+    if (onCiclosChange) onCiclosChange(lista);
+  }
+
+  async function addGrupo(cicloId) {
+    const nombre = (newGrupo[cicloId] || '').trim();
+    if (!nombre) return;
+    try {
+      const g = await api.createGrupo(cicloId, { nombre });
+      const lista = ciclos.map(c => c.id === cicloId ? { ...c, grupos: [...c.grupos, g] } : c);
+      setCiclos(lista);
+      setNewGrupo(prev => ({ ...prev, [cicloId]: '' }));
+      if (onCiclosChange) onCiclosChange(lista);
+    } catch(e) { alert(e.message); }
+  }
+
+  async function delGrupo(cicloId, grupoId) {
+    await api.deleteGrupo(grupoId);
+    const lista = ciclos.map(c => c.id === cicloId ? { ...c, grupos: c.grupos.filter(g => g.id !== grupoId) } : c);
+    setCiclos(lista);
+    if (onCiclosChange) onCiclosChange(lista);
+  }
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <h3 style={{ margin:0, fontSize:15, fontWeight:700 }}>Ciclos y Grupos</h3>
+      </div>
+      <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+        <input value={newCiclo.codigo} onChange={e=>setNewCiclo(p=>({...p,codigo:e.target.value}))}
+          placeholder="COD (SMR, IFC...)" style={{ ...IS, width:120 }}/>
+        <input value={newCiclo.nombre} onChange={e=>setNewCiclo(p=>({...p,nombre:e.target.value}))}
+          onKeyDown={e=>e.key==='Enter'&&addCiclo()}
+          placeholder="Nombre del ciclo" style={{ ...IS, flex:1 }}/>
+        <button onClick={addCiclo} style={{ background:'#4f46e5', color:'#fff', border:'none',
+          borderRadius:8, padding:'8px 16px', fontSize:13, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap' }}>
+          + Ciclo
+        </button>
+      </div>
+      {ciclos.length === 0
+        ? <p style={{ color:'#94a3b8', fontSize:13 }}>No hay ciclos. Crea el primero.</p>
+        : ciclos.map(ciclo => (
+          <div key={ciclo.id} style={{ border:'1px solid #e2e8f0', borderRadius:10, overflow:'hidden' }}>
+            <div style={{ background:'#f1f5f9', padding:'10px 14px', display:'flex', alignItems:'center', gap:10 }}>
+              <span style={{ background:'#4f46e5', color:'#fff', borderRadius:6,
+                padding:'2px 10px', fontWeight:800, fontSize:13 }}>{ciclo.codigo}</span>
+              <span style={{ flex:1, fontWeight:600, fontSize:14, color:'#0f172a' }}>{ciclo.nombre}</span>
+              <span style={{ fontSize:12, color:'#94a3b8' }}>{ciclo.grupos.length} grupos</span>
+              <button onClick={()=>delCiclo(ciclo.id)} style={{ background:'none', border:'1px solid #fca5a5',
+                borderRadius:6, color:'#dc2626', padding:'3px 10px', fontSize:12, cursor:'pointer' }}>X Eliminar</button>
+            </div>
+            <div style={{ padding:'10px 14px', display:'flex', flexWrap:'wrap', gap:8, alignItems:'center' }}>
+              {ciclo.grupos.map(g => (
+                <span key={g.id} style={{ background:'#eef2ff', color:'#4f46e5', border:'1px solid #c7d2fe',
+                  borderRadius:20, padding:'4px 12px', fontSize:13, display:'flex', alignItems:'center', gap:6 }}>
+                  {g.nombre}
+                  <button onClick={()=>delGrupo(ciclo.id,g.id)} style={{ background:'none', border:'none',
+                    color:'#94a3b8', cursor:'pointer', padding:0, fontSize:12, lineHeight:1 }}>x</button>
+                </span>
+              ))}
+              <div style={{ display:'flex', gap:6 }}>
+                <input value={newGrupo[ciclo.id]||''} placeholder="Nuevo grupo..."
+                  onChange={e=>setNewGrupo(p=>({...p,[ciclo.id]:e.target.value}))}
+                  onKeyDown={e=>e.key==='Enter'&&addGrupo(ciclo.id)}
+                  style={{ ...IS, width:140, padding:'4px 8px', fontSize:12 }}/>
+                <button onClick={()=>addGrupo(ciclo.id)} style={{ background:'#e0e7ff', color:'#4f46e5',
+                  border:'1px solid #c7d2fe', borderRadius:7, padding:'4px 12px', fontSize:12, cursor:'pointer' }}>+ Grupo</button>
+              </div>
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  );
+}
+
+// ── Importación masiva de usuarios ────────────────────────────────────────
+function normalizar(str) {
+  return str.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function generarUsuario(nombre) {
+  const coma = nombre.indexOf(',');
+  if (coma > -1) {
+    const n = nombre.slice(coma + 1).trim().split(/\s+/)[0];
+    const a = nombre.slice(0, coma).trim().split(/\s+/)[0];
+    return normalizar(n) + '.' + normalizar(a);
+  }
+  const partes = nombre.replace(',', ' ').trim().split(/\s+/).filter(Boolean);
+  if (partes.length < 2) return normalizar(partes[0] || 'usuario');
+  return normalizar(partes[0]) + '.' + normalizar(partes[1]);
+}
+
+function ImportacionMasiva({ onClose, onDone }) {
+  const [grupos,   setGrupos]   = useState([]);
+  const [grupoId,  setGrupoId]  = useState('');
+  const [texto,    setTexto]    = useState('');
+  const [rol,      setRol]      = useState('alumno');
+  const [dominio,  setDominio]  = useState('@centro.es');
+  const [password, setPassword] = useState('cambiar1234');
+  const [preview,  setPreview]  = useState([]);
+  const [resultado,setResultado]= useState(null);
+  const [loading,  setLoading]  = useState(false);
+  const [paso,     setPaso]     = useState(1);
+
+  useEffect(() => { api.getCiclos().then(setGrupos).catch(()=>{}); }, []);
+  const allGrupos = grupos.flatMap(c => c.grupos.map(g => ({ ...g, ciclo: c.codigo })));
+
+  const IS = { background:'#fff', border:'1px solid #cbd5e1', borderRadius:8,
+    color:'#0f172a', padding:'8px 12px', fontSize:13, outline:'none', width:'100%', boxSizing:'border-box' };
+
+  function parsear() {
+    const lineas = texto.split('\n').map(l => l.trim()).filter(Boolean);
+    const lista = lineas.map((linea, i) => {
+      const partes = linea.split('|').map(p => p.trim());
+      const nombre  = partes[0] || ('Usuario ' + (i+1));
+      const usuario = partes[1] || generarUsuario(nombre);
+      const email   = partes[2] || (usuario + dominio);
+      const alumno_nombre = rol === 'alumno' ? nombre : null;
+      const gid = grupoId && !String(grupoId).startsWith('c') ? Number(grupoId) : null;
+      return { nombre, usuario, email, rol, password, alumno_nombre, grupo_id: gid, _idx: i };
+    });
+    setPreview(lista);
+    setPaso(2);
+  }
+
+  function editarFila(idx, campo, valor) {
+    setPreview(prev => prev.map(u => u._idx === idx ? { ...u, [campo]: valor } : u));
+  }
+  function eliminarFila(idx) {
+    setPreview(prev => prev.filter(u => u._idx !== idx));
+  }
+
+  async function crear() {
+    setLoading(true);
+    const res = [];
+    for (const u of preview) {
+      try {
+        await api.createUsuario(u);
+        res.push({ ...u, ok: true });
+      } catch(e) {
+        res.push({ ...u, ok: false, error: e.message });
+      }
+    }
+    setResultado(res);
+    setPaso(3);
+    setLoading(false);
+    if (onDone) onDone();
+  }
+
+  const creados = resultado?.filter(r => r.ok).length  || 0;
+  const errores = resultado?.filter(r => !r.ok).length || 0;
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)',
+      display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:16 }}>
+      <div style={{ background:'#fff', borderRadius:16, width:'100%', maxWidth:700,
+        maxHeight:'90vh', display:'flex', flexDirection:'column',
+        boxShadow:'0 20px 60px rgba(0,0,0,0.2)' }}>
+        <div style={{ padding:'18px 24px', borderBottom:'1px solid #e2e8f0',
+          display:'flex', alignItems:'center', gap:12 }}>
+          <div style={{ flex:1 }}>
+            <h2 style={{ margin:0, fontSize:16, fontWeight:700, color:'#0f172a' }}>Importacion masiva</h2>
+            <p style={{ margin:0, fontSize:12, color:'#64748b' }}>
+              {paso === 1 && 'Paso 1: Pega los nombres'}
+              {paso === 2 && ('Paso 2: Revisa los ' + preview.length + ' usuarios')}
+              {paso === 3 && ('Resultado: ' + creados + ' creados, ' + errores + ' errores')}
+            </p>
+          </div>
+          <button onClick={onClose} style={{ background:'none', border:'1px solid #e2e8f0',
+            borderRadius:8, padding:'6px 12px', cursor:'pointer', color:'#64748b' }}>X</button>
+        </div>
+        <div style={{ padding:'20px 24px', flex:1, overflowY:'auto', display:'flex', flexDirection:'column', gap:16 }}>
+
+          {paso === 1 && <>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+              <div>
+                <label style={{ fontSize:12, color:'#64748b', display:'block', marginBottom:4 }}>Rol para todos</label>
+                <select value={rol} onChange={e => setRol(e.target.value)} style={IS}>
+                  <option value="alumno">Alumno</option>
+                  <option value="docente">Docente</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize:12, color:'#64748b', display:'block', marginBottom:4 }}>Grupo (opcional)</label>
+                <select value={grupoId} onChange={e => setGrupoId(e.target.value)} style={{ ...IS, cursor:'pointer' }}>
+                  <option value=''>-- Sin grupo --</option>
+                  {grupos.flatMap(c =>
+                    c.grupos.length > 0
+                      ? c.grupos.map(g => (
+                          <option key={g.id} value={String(g.id)}>{g.nombre} ({c.codigo})</option>
+                        ))
+                      : [<option key={'c'+c.id} value={'c'+c.id}>{c.codigo}</option>]
+                  )}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize:12, color:'#64748b', display:'block', marginBottom:4 }}>Dominio email</label>
+                <input value={dominio} onChange={e => setDominio(e.target.value)}
+                  placeholder="@centro.es" style={IS}/>
+              </div>
+              <div>
+                <label style={{ fontSize:12, color:'#64748b', display:'block', marginBottom:4 }}>Contrasena inicial</label>
+                <input value={password} onChange={e => setPassword(e.target.value)}
+                  placeholder="cambiar1234" style={IS}/>
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize:12, color:'#64748b', display:'block', marginBottom:6 }}>Nombres (uno por linea)</label>
+              <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:8,
+                padding:'8px 12px', fontSize:11, color:'#94a3b8', marginBottom:8 }}>
+                Formatos: <code style={{ color:'#4f46e5' }}>Garcia Lopez, Ana</code> o{' '}
+                <code style={{ color:'#4f46e5' }}>Garcia Lopez, Ana | ana.garcia | ana@ies.es</code>
+              </div>
+              <textarea value={texto} onChange={e => setTexto(e.target.value)}
+                placeholder={"Garcia Lopez, Ana\nMartinez Ruiz, Carlos\nSanchez Perez, Elena"}
+                rows={10} style={{ ...IS, fontFamily:'monospace', resize:'vertical', lineHeight:1.6 }}/>
+              <div style={{ fontSize:12, color:'#94a3b8', marginTop:4 }}>
+                {texto.split('\n').filter(l => l.trim()).length} lineas
+              </div>
+            </div>
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={parsear} disabled={!texto.trim()}
+                style={{ background: texto.trim() ? '#4f46e5' : '#94a3b8', color:'#fff', border:'none',
+                  borderRadius:8, padding:'10px 24px', fontSize:14, fontWeight:600,
+                  cursor: texto.trim() ? 'pointer' : 'not-allowed' }}>
+                Previsualizar
+              </button>
+              <button onClick={onClose} style={{ background:'none', border:'1px solid #e2e8f0',
+                borderRadius:8, padding:'10px 16px', fontSize:13, color:'#64748b', cursor:'pointer' }}>
+                Cancelar
+              </button>
+            </div>
+          </>}
+
+          {paso === 2 && <>
+            <div style={{ borderRadius:10, overflow:'auto', border:'1px solid #e2e8f0' }}>
+              <table style={{ width:'100%', borderCollapse:'collapse', minWidth:500 }}>
+                <thead>
+                  <tr style={{ background:'#f1f5f9' }}>
+                    {['Nombre','Usuario','Email','Rol',''].map(h => (
+                      <th key={h} style={{ padding:'8px 12px', fontSize:11, fontWeight:600,
+                        textTransform:'uppercase', letterSpacing:.6, color:'#475569',
+                        textAlign:'left', borderBottom:'1px solid #e2e8f0' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.map((u, i) => (
+                    <tr key={u._idx} style={{ background: i%2===0 ? '#fff' : '#f8fafc' }}>
+                      <td style={{ padding:'6px 12px' }}>
+                        <input value={u.nombre} onChange={e => editarFila(u._idx,'nombre',e.target.value)}
+                          style={{ border:'none', background:'transparent', fontSize:13, color:'#0f172a', width:'100%', outline:'none' }}/>
+                      </td>
+                      <td style={{ padding:'6px 12px' }}>
+                        <input value={u.usuario} onChange={e => editarFila(u._idx,'usuario',e.target.value)}
+                          style={{ border:'none', background:'transparent', fontSize:12, color:'#64748b', fontFamily:'monospace', width:'100%', outline:'none' }}/>
+                      </td>
+                      <td style={{ padding:'6px 12px' }}>
+                        <input value={u.email} onChange={e => editarFila(u._idx,'email',e.target.value)}
+                          style={{ border:'none', background:'transparent', fontSize:12, color:'#64748b', width:'100%', outline:'none' }}/>
+                      </td>
+                      <td style={{ padding:'6px 12px' }}>
+                        <select value={u.rol} onChange={e => editarFila(u._idx,'rol',e.target.value)}
+                          style={{ border:'none', background:'transparent', fontSize:12, color:'#475569', cursor:'pointer' }}>
+                          <option value="alumno">Alumno</option>
+                          <option value="docente">Docente</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </td>
+                      <td style={{ padding:'6px 8px' }}>
+                        <button onClick={() => eliminarFila(u._idx)}
+                          style={{ background:'none', border:'none', color:'#dc2626', fontSize:14, cursor:'pointer', padding:'2px 6px' }}>X</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+              <button onClick={crear} disabled={loading || preview.length === 0}
+                style={{ background: preview.length ? '#059669' : '#94a3b8', color:'#fff', border:'none',
+                  borderRadius:8, padding:'10px 24px', fontSize:14, fontWeight:600,
+                  cursor: preview.length ? 'pointer' : 'not-allowed' }}>
+                {loading ? 'Creando...' : ('Crear ' + preview.length + ' usuarios')}
+              </button>
+              <button onClick={() => setPaso(1)} style={{ background:'none', border:'1px solid #e2e8f0',
+                borderRadius:8, padding:'10px 16px', fontSize:13, color:'#64748b', cursor:'pointer' }}>
+                Atras
+              </button>
+              <span style={{ fontSize:12, color:'#94a3b8', marginLeft:'auto' }}>
+                Contrasena: <code style={{ color:'#4f46e5' }}>{password}</code>
+              </span>
+            </div>
+          </>}
+
+          {paso === 3 && <>
+            <div style={{ display:'flex', gap:12, marginBottom:8 }}>
+              <div style={{ flex:1, background:'#f0fdf4', border:'1px solid #bbf7d0',
+                borderRadius:10, padding:'14px 18px', textAlign:'center' }}>
+                <div style={{ fontSize:28, fontWeight:800, color:'#059669' }}>{creados}</div>
+                <div style={{ fontSize:13, color:'#065f46' }}>creados correctamente</div>
+              </div>
+              {errores > 0 && (
+                <div style={{ flex:1, background:'#fef2f2', border:'1px solid #fecaca',
+                  borderRadius:10, padding:'14px 18px', textAlign:'center' }}>
+                  <div style={{ fontSize:28, fontWeight:800, color:'#dc2626' }}>{errores}</div>
+                  <div style={{ fontSize:13, color:'#991b1b' }}>errores</div>
+                </div>
+              )}
+            </div>
+            {errores > 0 && resultado.filter(r => !r.ok).map((r, i) => (
+              <div key={i} style={{ padding:'8px 14px', background: i%2===0 ? '#fef2f2' : '#fff5f5',
+                fontSize:13, display:'flex', gap:12, borderRadius:6 }}>
+                <span style={{ color:'#dc2626' }}>X</span>
+                <span style={{ flex:1 }}>{r.nombre}</span>
+                <span style={{ color:'#94a3b8' }}>{r.error}</span>
+              </div>
+            ))}
+            <button onClick={onClose} style={{ background:'#4f46e5', color:'#fff', border:'none',
+              borderRadius:8, padding:'10px 24px', fontSize:14, fontWeight:600, cursor:'pointer', alignSelf:'flex-start' }}>
+              Cerrar
+            </button>
+          </>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard({ cuadernos, setCuadernos, currentUser, onOpenCuaderno, onLogout }) {
   const [showNuevo,    setShowNuevo]    = useState(false);
   const [showUsuarios, setShowUsuarios] = useState(false);
