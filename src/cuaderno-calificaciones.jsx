@@ -805,8 +805,26 @@ export default function CuadernoCalificaciones({
   }
   function addActividad({ nombre, tipo, ras: rasArr, ud, peso, notas }) {
     const id    = "A"+Date.now();
-    const orden = actividades.filter(a=>a.ras.some(r=>rasArr.includes(r))&&a.tipo===tipo).length;
-    setActividades(prev=>[...prev,{ id, nombre, tipo, ras:rasArr, ud, peso, orden, notas }]);
+    const primaryRA = rasArr[0];
+
+    setActividades(prev => {
+      const orden  = prev.filter(a=>a.ras.some(r=>rasArr.includes(r))&&a.tipo===tipo).length;
+      const newAct = { id, nombre, tipo, ras:rasArr, ud, peso, orden, notas };
+      const all    = [...prev, newAct];
+
+      if (!primaryRA) return all;
+
+      // Redistribuir proporcionalmente entre todas las actividades del mismo RA primario y tipo
+      const grupo = all.filter(a => a.ras[0]===primaryRA && a.tipo===tipo);
+      const count  = grupo.length;
+      if (count < 2) return all;
+
+      const base = Math.floor(100 / count);
+      const rem  = 100 - base * count;
+      const redistMap = new Map(grupo.map((a, i) => [a.id, base + (i < rem ? 1 : 0)]));
+
+      return all.map(a => redistMap.has(a.id) ? { ...a, peso: redistMap.get(a.id) } : a);
+    });
   }
   function removeAlumno(id)    { setAlumnos(prev=>prev.filter(a=>a.id!==id)); }
   function removeActividad(id) { setActividades(prev=>prev.filter(a=>a.id!==id)); if(editingActId===id) setEditingActId(null); }
@@ -824,7 +842,7 @@ export default function CuadernoCalificaciones({
 
   // ── RESUMEN ──────────────────────────────────────────────────────────────
   function TabResumen() {
-    const data = alumnos.map(al=>({ nombre:al.nombre.split(",")[0], nota:calcNotaFinal(al.id,ras,actividades) }));
+    const data = alumnos.map(al=>({ id:al.id, nombre:al.nombre.split(",")[0], nota:calcNotaFinal(al.id,ras,actividades) }));
     const dist = [
       { label:"< 5",   count:data.filter(d=>d.nota!==null&&d.nota<5).length,             color:"#dc2626" },
       { label:"5–6.9", count:data.filter(d=>d.nota!==null&&d.nota>=5&&d.nota<7).length,  color:"#d97706" },
@@ -856,7 +874,12 @@ export default function CuadernoCalificaciones({
             <h3 style={SL}>Calificaciones finales</h3>
             {data.map(d=>(
               <div key={d.nombre} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
-                <span style={{ color:"#334155", fontSize:13, flex:1 }}>{d.nombre}</span>
+                <span onClick={()=>{ setAlumnoSel(d.id); setTab("alumno"); }}
+                  style={{ color:"#4f46e5", fontSize:13, flex:1, cursor:"pointer", fontWeight:500,
+                    textDecoration:"underline", textDecorationStyle:"dotted", textUnderlineOffset:3 }}
+                  title="Ver ficha del alumno">
+                  {d.nombre}
+                </span>
                 <div style={{ flex:3, height:6, background:"#f1f5f9", borderRadius:4, overflow:"hidden" }}>
                   <div style={{ width:`${d.nota?d.nota*10:0}%`, height:"100%", background:notaColor(d.nota), borderRadius:4, transition:"width .6s" }}/>
                 </div>
@@ -1160,26 +1183,48 @@ export default function CuadernoCalificaciones({
         <NuevaActividadForm ras={ras} uds={uds} alumnos={alumnos} onAdd={addActividad}/>
         {/* Grupos por RA */}
         {ras.map(ra=>{
-          const acts=actsDeRA(ra.id,"actividad"), exams=actsDeRA(ra.id,"examen");
+          const acts  = actsDeRA(ra.id,"actividad");
+          const exams = actsDeRA(ra.id,"examen");
+          const totalAct  = acts.reduce((s,a)=>s+Number(a.peso||0),0);
+          const totalExam = exams.reduce((s,a)=>s+Number(a.peso||0),0);
+          const okAct     = !acts.length  || Math.abs(totalAct -100)<0.5;
+          const okExam    = !exams.length || Math.abs(totalExam-100)<0.5;
+
+          function PesoBadge({ total, ok }) {
+            if (!total && total!==0) return null;
+            return (
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
+                marginTop:8, padding:"5px 8px", borderRadius:6, fontSize:11, fontWeight:700,
+                background:ok?"#f0fdf4":"#fef2f2", border:`1px solid ${ok?"#bbf7d0":"#fca5a5"}`,
+                color:ok?"#16a34a":"#dc2626" }}>
+                <span>Σ pesos: {total}%</span>
+                <span>{ok?"✓ correcto":"⚠ debe ser 100%"}</span>
+              </div>
+            );
+          }
+
           return (
-            <div key={ra.id} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, overflow:"hidden", boxShadow:SH }}>
+            <div key={ra.id} style={{ background:"#fff", border:`1px solid ${(!okAct||!okExam)?"#fca5a5":"#e2e8f0"}`, borderRadius:12, overflow:"hidden", boxShadow:SH }}>
               <div style={{ background:"#eef2ff", padding:"10px 16px", display:"flex", alignItems:"center", gap:10 }}>
                 <span style={{ background:"#4f46e5", color:"#fff", borderRadius:6, padding:"2px 10px", fontWeight:700, fontSize:13 }}>{ra.id}</span>
                 <span style={{ color:"#334155", fontSize:13, flex:1 }}>{ra.titulo}</span>
                 <span style={{ fontSize:11, color:"#0891b2", background:"#ecfeff", border:"1px solid #a5f3fc", borderRadius:6, padding:"2px 8px" }}>Act {ra.pctAct??40}%</span>
                 <span style={{ fontSize:11, color:"#64748b" }}>+</span>
                 <span style={{ fontSize:11, color:"#7c3aed", background:"#f5f3ff", border:"1px solid #ddd6fe", borderRadius:6, padding:"2px 8px" }}>Exam {ra.pctExam??60}%</span>
+                {(!okAct||!okExam) && <span style={{ fontSize:11, color:"#dc2626", fontWeight:700 }}>⚠ pesos incorrectos</span>}
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr" }}>
                 <div style={{ borderRight:"1px solid #f1f5f9", padding:12 }}>
                   <span style={{ color:"#0891b2", fontSize:11, fontWeight:600, textTransform:"uppercase", letterSpacing:.8, display:"block", marginBottom:8 }}>📋 Actividades</span>
                   {acts.map((act,idx)=><ActRow key={act.id} act={act} raId={ra.id} tipo="actividad" idx={idx}/>)}
                   <DropEnd raId={ra.id} tipo="actividad"/>
+                  {acts.length>0 && <PesoBadge total={totalAct} ok={okAct}/>}
                 </div>
                 <div style={{ padding:12 }}>
                   <span style={{ color:"#7c3aed", fontSize:11, fontWeight:600, textTransform:"uppercase", letterSpacing:.8, display:"block", marginBottom:8 }}>📄 Exámenes</span>
                   {exams.map((act,idx)=><ActRow key={act.id} act={act} raId={ra.id} tipo="examen" idx={idx}/>)}
                   <DropEnd raId={ra.id} tipo="examen"/>
+                  {exams.length>0 && <PesoBadge total={totalExam} ok={okExam}/>}
                 </div>
               </div>
             </div>
