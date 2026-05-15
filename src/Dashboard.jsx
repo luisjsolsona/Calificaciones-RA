@@ -393,10 +393,6 @@ function CiclosManager({ onCiclosChange }) {
 
   useEffect(() => { api.getCiclos().then(setCiclos).catch(console.error); }, []);
 
-  useEffect(() => { api.getCiclos().then(setGrupos).catch(()=>{}); }, []);
-
-  const allGrupos = grupos.flatMap(c => c.grupos.map(g => ({ ...g, ciclo: c.codigo })));
-
   const IS = { background:'#fff', border:'1px solid #cbd5e1', borderRadius:8,
     color:'#0f172a', padding:'7px 10px', fontSize:13, outline:'none', boxSizing:'border-box' };
 
@@ -529,6 +525,9 @@ function ImportacionMasiva({ onClose, onDone }) {
   const [resultado,setResultado]= useState(null);
   const [loading,  setLoading]  = useState(false);
   const [paso,     setPaso]     = useState(1); // 1=entrada, 2=preview, 3=resultado
+
+  useEffect(() => { api.getCiclos().then(setGrupos).catch(()=>{}); }, []);
+  const allGrupos = grupos.flatMap(c => c.grupos.map(g => ({ ...g, ciclo: c.codigo })));
 
   const IS = { background:'#fff', border:'1px solid #cbd5e1', borderRadius:8,
     color:'#0f172a', padding:'8px 12px', fontSize:13, outline:'none',
