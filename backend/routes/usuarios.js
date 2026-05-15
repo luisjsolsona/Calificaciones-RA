@@ -23,7 +23,12 @@ router.post('/', auth(['admin']), (req, res) => {
       'INSERT INTO usuarios(email,usuario,password_hash,nombre,rol,alumno_nombre,grupo_id) VALUES(?,?,?,?,?,?,?)'
     ).run(email, usuario || null, hash, nombre, rol, alumno_nombre || null, grupo_id || null);
     res.json({ id: r.lastInsertRowid, email, usuario, nombre, rol, alumno_nombre, grupo_id });
-  } catch (e) { res.status(409).json({ error: 'Email o usuario ya existe' }); }
+  } catch (e) {
+    if (e.message && (e.message.includes('UNIQUE') || e.message.includes('unique')))
+      res.status(409).json({ error: 'Email o usuario ya existe' });
+    else
+      res.status(400).json({ error: e.message });
+  }
 });
 
 // PUT /api/usuarios/:id

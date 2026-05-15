@@ -542,7 +542,8 @@ function ImportacionMasiva({ onClose, onDone }) {
       const usuario = partes[1] || generarUsuario(nombre);
       const email   = partes[2] || (usuario + dominio);
       const alumno_nombre = rol === 'alumno' ? nombre : null;
-      return { nombre, usuario, email, rol, password, alumno_nombre, grupo_id: grupoId || null, _idx: i };
+      const gid = grupoId && !String(grupoId).startsWith('c') ? Number(grupoId) : null;
+      return { nombre, usuario, email, rol, password, alumno_nombre, grupo_id: gid, _idx: i };
     });
     setPreview(lista);
     setPaso(2);
