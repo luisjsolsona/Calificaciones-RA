@@ -71,6 +71,15 @@ db.exec(`
   );
 `);
 
+// Tabla grupos de docentes (many-to-many)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS docente_grupos (
+    docente_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    grupo_id   INTEGER NOT NULL REFERENCES grupos(id)  ON DELETE CASCADE,
+    PRIMARY KEY (docente_id, grupo_id)
+  );
+`);
+
 // Migrar ciclo_id existente a docente_ciclos
 const sinMigrar = db.prepare(
   'SELECT id, ciclo_id FROM usuarios WHERE ciclo_id IS NOT NULL AND id NOT IN (SELECT docente_id FROM docente_ciclos)'

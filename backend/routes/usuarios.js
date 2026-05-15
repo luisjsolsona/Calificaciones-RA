@@ -13,6 +13,9 @@ router.get('/', auth(['admin', 'docente']), (req, res) => {
       ciclos: db.prepare(
         'SELECT c.id,c.codigo,c.nombre FROM docente_ciclos dc JOIN ciclos c ON dc.ciclo_id=c.id WHERE dc.docente_id=? ORDER BY c.codigo'
       ).all(u.id),
+      grupos_docente: db.prepare(
+        'SELECT g.id,g.nombre,ci.codigo as ciclo_codigo FROM docente_grupos dg JOIN grupos g ON dg.grupo_id=g.id JOIN ciclos ci ON g.ciclo_id=ci.id WHERE dg.docente_id=? ORDER BY ci.codigo,g.nombre'
+      ).all(u.id),
     }));
   }
   const rows = rol
@@ -68,12 +71,21 @@ router.delete('/:id', auth(['admin']), (req, res) => {
   res.json({ ok: true });
 });
 
-// PUT /api/usuarios/:id/ciclos — reemplaza todos los ciclos del docente
+// PUT /api/usuarios/:id/ciclos
 router.put('/:id/ciclos', auth(['admin']), (req, res) => {
-  const { ciclos } = req.body; // array de ciclo_id
+  const { ciclos } = req.body;
   db.prepare('DELETE FROM docente_ciclos WHERE docente_id=?').run(req.params.id);
   const ins = db.prepare('INSERT OR IGNORE INTO docente_ciclos(docente_id,ciclo_id) VALUES(?,?)');
   (ciclos || []).forEach(cid => ins.run(req.params.id, cid));
+  res.json({ ok: true });
+});
+
+// PUT /api/usuarios/:id/grupos
+router.put('/:id/grupos', auth(['admin']), (req, res) => {
+  const { grupos } = req.body;
+  db.prepare('DELETE FROM docente_grupos WHERE docente_id=?').run(req.params.id);
+  const ins = db.prepare('INSERT OR IGNORE INTO docente_grupos(docente_id,grupo_id) VALUES(?,?)');
+  (grupos || []).forEach(gid => ins.run(req.params.id, gid));
   res.json({ ok: true });
 });
 

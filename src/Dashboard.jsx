@@ -459,7 +459,7 @@ function UserManager({ onRefresh }) {
   const [filtroRol,   setFiltroRol]   = useState('');
   const [filtroGrupo, setFiltroGrupo] = useState('');
   const [form, setForm] = useState({
-    nombre:'', email:'', usuario:'', password:'', rol:'docente', alumno_nombre:'', grupo_id:'', ciclosSeleccionados:[]
+    nombre:'', email:'', usuario:'', password:'', rol:'docente', alumno_nombre:'', grupo_id:'', ciclosSeleccionados:[], gruposSeleccionados:[]
   });
 
   useEffect(() => {
@@ -475,6 +475,7 @@ function UserManager({ onRefresh }) {
       ? c.grupos.map(g => ({ id: g.id, label: g.nombre + ' (' + c.codigo + ')', cicloId: c.id }))
       : [{ id: 'c' + c.id, label: c.codigo, cicloId: c.id }]
   );
+  const todosGrupos = ciclos.flatMap(c => c.grupos.map(g => ({ ...g, ciclo_codigo: c.codigo })));
 
   // Filtrado de la lista
   const lista = usuarios.filter(u => {
@@ -509,7 +510,8 @@ function UserManager({ onRefresh }) {
       nombre: u.nombre, email: u.email, usuario: u.usuario||'',
       password: '', rol: u.rol, alumno_nombre: u.alumno_nombre||'',
       grupo_id: u.grupo_id ? String(u.grupo_id) : '',
-      ciclosSeleccionados: (u.ciclos||[]).map(c => c.id)
+      ciclosSeleccionados: (u.ciclos||[]).map(c => c.id),
+      gruposSeleccionados: (u.grupos_docente||[]).map(g => g.id)
     });
     setEditUser(u); setShowForm(true);
   }
@@ -523,11 +525,20 @@ function UserManager({ onRefresh }) {
         alumno_nombre: form.rol === 'alumno' ? (form.alumno_nombre || form.nombre) : null,
         grupo_id: form.grupo_id && !String(form.grupo_id).startsWith('c') ? Number(form.grupo_id) : null,
       };
+      let userId;
       if (editUser) {
         await api.updateUsuario(editUser.id, payload);
         if (form.password) await api.changePassword(editUser.id, form.password);
+        userId = editUser.id;
       } else {
-        await api.createUsuario(payload);
+        const created = await api.createUsuario(payload);
+        userId = created.id;
+      }
+      if (userId && (form.rol === 'docente' || form.rol === 'admin')) {
+        await Promise.all([
+          api.updateCiclosDocente(userId, form.ciclosSeleccionados),
+          api.updateGruposDocente(userId, form.gruposSeleccionados),
+        ]).catch(() => {});
       }
       const fresh = await api.getUsuarios();
       setUsuarios(fresh);
@@ -653,6 +664,31 @@ function UserManager({ onRefresh }) {
                 </select>
               </div>
             )}
+            {(form.rol === 'docente' || form.rol === 'admin') && (
+              <div style={{ ...IS, padding:'6px 10px', minHeight:38 }}>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:4, marginBottom:4 }}>
+                  {form.gruposSeleccionados.map(gid => {
+                    const g = todosGrupos.find(x=>x.id===gid);
+                    return g ? (
+                      <span key={gid} style={{ background:'#eef2ff', color:'#4f46e5', border:'1px solid #c7d2fe',
+                        borderRadius:20, padding:'2px 8px', fontSize:11, display:'flex', alignItems:'center', gap:4 }}>
+                        {g.nombre} <span style={{ color:'#94a3b8', fontSize:10 }}>({g.ciclo_codigo})</span>
+                        <button type='button' onClick={()=>setForm(p=>({...p,gruposSeleccionados:p.gruposSeleccionados.filter(x=>x!==gid)}))}
+                          style={{ background:'none', border:'none', cursor:'pointer', color:'#94a3b8', padding:0, fontSize:11, lineHeight:1 }}>x</button>
+                      </span>
+                    ) : null;
+                  })}
+                  {form.gruposSeleccionados.length === 0 && <span style={{ color:'#94a3b8', fontSize:12 }}>Grupos donde imparte (ninguno)</span>}
+                </div>
+                <select value='' onChange={e=>{ const v=Number(e.target.value); if(v&&!form.gruposSeleccionados.includes(v)) setForm(p=>({...p,gruposSeleccionados:[...p.gruposSeleccionados,v]})); }}
+                  style={{ border:'none', background:'transparent', fontSize:12, color:'#4f46e5', cursor:'pointer', outline:'none' }}>
+                  <option value=''>+ Añadir grupo...</option>
+                  {todosGrupos.filter(g=>!form.gruposSeleccionados.includes(g.id)).map(g=>(
+                    <option key={g.id} value={g.id}>{g.nombre} ({g.ciclo_codigo})</option>
+                  ))}
+                </select>
+              </div>
+            )}
             {form.rol === 'alumno' && (
               <input style={{ ...IS, gridColumn:'1/-1' }} value={form.alumno_nombre}
                 onChange={e=>setForm(p=>({...p,alumno_nombre:e.target.value}))}
@@ -714,10 +750,15 @@ function UserManager({ onRefresh }) {
                       : <span style={{ color:'#cbd5e1' }}>—</span>}
                   </td>
                   <td style={{ padding:'9px 12px', fontSize:12 }}>
-                    {u.grupo_nombre
-                      ? <span style={{ background:'#eef2ff', color:'#4f46e5', border:'1px solid #c7d2fe',
-                          borderRadius:6, padding:'2px 8px', fontSize:11 }}>{u.grupo_nombre}</span>
-                      : <span style={{ color:'#cbd5e1' }}>—</span>}
+                    {(u.grupos_docente||[]).length > 0
+                      ? (u.grupos_docente||[]).map(g => (
+                          <span key={g.id} style={{ background:'#eef2ff', color:'#4f46e5', border:'1px solid #c7d2fe',
+                            borderRadius:6, padding:'2px 5px', fontSize:10, marginRight:2 }}>{g.nombre}</span>
+                        ))
+                      : u.grupo_nombre
+                        ? <span style={{ background:'#eef2ff', color:'#4f46e5', border:'1px solid #c7d2fe',
+                            borderRadius:6, padding:'2px 8px', fontSize:11 }}>{u.grupo_nombre}</span>
+                        : <span style={{ color:'#cbd5e1' }}>—</span>}
                   </td>
                   <td style={{ padding:'9px 12px', fontSize:12, color:'#64748b' }}>
                     {u.alumno_nombre || <span style={{ color:'#cbd5e1' }}>—</span>}
