@@ -32,7 +32,7 @@ router.post('/:id/grupos', auth(['admin']), (req, res) => {
   try {
     const r = db.prepare('INSERT INTO grupos(ciclo_id,nombre) VALUES(?,?)').run(req.params.id, nombre);
     res.json({ id: r.lastInsertRowid, ciclo_id: parseInt(req.params.id), nombre });
-  } catch { res.status(409).json({ error: 'Grupo ya existe en este ciclo' }); }
+  } catch { res.status(409).json({ error: 'Módulo ya existe en este ciclo' }); }
 });
 
 // DELETE /api/grupos/:id

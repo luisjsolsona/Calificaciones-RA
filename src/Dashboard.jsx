@@ -87,7 +87,7 @@ function InscripcionesModal({ cuaderno, onClose }) {
   const IS = { background:"#fff", border:"1px solid #e2e8f0", borderRadius:8,
     padding:"8px 12px", fontSize:13, outline:"none", width:"100%", boxSizing:"border-box" };
 
-  // Opciones de filtro: ciclos y sus grupos
+  // Opciones de filtro: ciclos y sus módulos
   const opcionesFiltro = ciclos.flatMap(c => [
     { value: 'c' + c.id, label: c.codigo + (c.nombre !== c.codigo ? ' — ' + c.nombre : ''), isCiclo: true },
     ...c.grupos.map(g => ({ value: String(g.id), label: '  ' + g.nombre, isCiclo: false })),
@@ -154,7 +154,7 @@ function InscripcionesModal({ cuaderno, onClose }) {
               <div style={{ display:"flex", gap:8, marginBottom:10 }}>
                 <select value={filtroGrupo} onChange={e => setFiltroGrupo(e.target.value)}
                   style={{ ...IS, flex:"0 0 auto", width:"auto", minWidth:140, cursor:"pointer" }}>
-                  <option value=''>Todos los grupos</option>
+                  <option value=''>Todos los módulos</option>
                   {opcionesFiltro.map(o => (
                     <option key={o.value} value={o.value}
                       style={{ fontWeight: o.isCiclo ? 700 : 400, color: o.isCiclo ? '#4f46e5' : '#0f172a' }}>
@@ -459,7 +459,7 @@ function UserManager({ onRefresh }) {
   const [filtroRol,   setFiltroRol]   = useState('');
   const [filtroGrupo, setFiltroGrupo] = useState('');
   const [form, setForm] = useState({
-    nombre:'', email:'', usuario:'', password:'', rol:'docente', alumno_nombre:'', grupo_id:'', ciclosSeleccionados:[], gruposSeleccionados:[]
+    nombre:'', email:'', usuario:'', password:'', rol:'docente', alumno_nombre:'', grupo_id:'', ciclosSeleccionados:[], módulosSeleccionados:[]
   });
 
   useEffect(() => {
@@ -511,7 +511,7 @@ function UserManager({ onRefresh }) {
       password: '', rol: u.rol, alumno_nombre: u.alumno_nombre||'',
       grupo_id: u.grupo_id ? String(u.grupo_id) : '',
       ciclosSeleccionados: (u.ciclos||[]).map(c => c.id),
-      gruposSeleccionados: (u.grupos_docente||[]).map(g => g.id)
+      módulosSeleccionados: (u.grupos_docente||[]).map(g => g.id)
     });
     setEditUser(u); setShowForm(true);
   }
@@ -585,7 +585,7 @@ function UserManager({ onRefresh }) {
         </select>
         <select value={filtroGrupo} onChange={e => setFiltroGrupo(e.target.value)}
           style={{ ...IS, width:'auto', cursor:'pointer' }}>
-          <option value=''>Todos los grupos</option>
+          <option value=''>Todos los módulos</option>
           {ciclos.map(c => (
             c.grupos.length > 0 ? [
               <option key={'c'+c.id} value={'c'+c.id} style={{ fontWeight:700, color:'#4f46e5' }}>
@@ -634,7 +634,7 @@ function UserManager({ onRefresh }) {
             </select>
             <select value={form.grupo_id} onChange={e=>setForm(p=>({...p,grupo_id:e.target.value}))}
               style={{ ...IS, cursor:'pointer' }}>
-              <option value=''>Sin grupo (alumnos)</option>
+              <option value=''>Sin módulo (alumnos)</option>
               {allGrupos.map(g => (
                 <option key={g.id} value={String(g.id)}>{g.label}</option>
               ))}
@@ -678,11 +678,11 @@ function UserManager({ onRefresh }) {
                       </span>
                     ) : null;
                   })}
-                  {form.gruposSeleccionados.length === 0 && <span style={{ color:'#94a3b8', fontSize:12 }}>Grupos donde imparte (ninguno)</span>}
+                  {form.gruposSeleccionados.length === 0 && <span style={{ color:'#94a3b8', fontSize:12 }}>Módulos donde imparte (ninguno)</span>}
                 </div>
                 <select value='' onChange={e=>{ const v=Number(e.target.value); if(v&&!form.gruposSeleccionados.includes(v)) setForm(p=>({...p,gruposSeleccionados:[...p.gruposSeleccionados,v]})); }}
                   style={{ border:'none', background:'transparent', fontSize:12, color:'#4f46e5', cursor:'pointer', outline:'none' }}>
-                  <option value=''>+ Añadir grupo...</option>
+                  <option value=''>+ Añadir módulo...</option>
                   {todosGrupos.filter(g=>!form.gruposSeleccionados.includes(g.id)).map(g=>(
                     <option key={g.id} value={g.id}>{g.nombre} ({g.ciclo_codigo})</option>
                   ))}
@@ -713,7 +713,7 @@ function UserManager({ onRefresh }) {
         <table style={{ width:'100%', borderCollapse:'collapse', minWidth:600 }}>
           <thead>
             <tr style={{ background:'#f1f5f9' }}>
-              {['Nombre','Email / Usuario','Rol','Ciclo','Grupo','Nombre en cuaderno',''].map(h => (
+              {['Nombre','Email / Usuario','Rol','Ciclo','Módulo','Nombre en cuaderno',''].map(h => (
                 <th key={h} style={{ padding:'8px 12px', fontSize:11, fontWeight:600,
                   textTransform:'uppercase', letterSpacing:.6, color:'#475569',
                   textAlign:'left', borderBottom:'1px solid #e2e8f0', whiteSpace:'nowrap' }}>{h}</th>
@@ -786,7 +786,7 @@ function UserManager({ onRefresh }) {
 
 // ── Dashboard principal ────────────────────────────────────────────────────
 
-// ── Gestión de Ciclos y Grupos ────────────────────────────────────────────
+// ── Gestión de Ciclos y Módulos ────────────────────────────────────────────
 function CiclosManager({ onCiclosChange }) {
   const [ciclos,    setCiclos]    = useState([]);
   const [newCiclo,  setNewCiclo]  = useState({ nombre:'', codigo:'' });
@@ -809,7 +809,7 @@ function CiclosManager({ onCiclosChange }) {
   }
 
   async function delCiclo(id) {
-    if (!confirm('Eliminar ciclo y todos sus grupos?')) return;
+    if (!confirm('Eliminar ciclo y todos sus módulos?')) return;
     await api.deleteCiclo(id);
     const lista = ciclos.filter(c => c.id !== id);
     setCiclos(lista);
@@ -821,7 +821,7 @@ function CiclosManager({ onCiclosChange }) {
     if (!nombre) return;
     try {
       const g = await api.createGrupo(cicloId, { nombre });
-      const lista = ciclos.map(c => c.id === cicloId ? { ...c, grupos: [...c.grupos, g] } : c);
+      const lista = ciclos.map(c => c.id === cicloId ? { ...c, módulos: [...c.grupos, g] } : c);
       setCiclos(lista);
       setNewGrupo(prev => ({ ...prev, [cicloId]: '' }));
       if (onCiclosChange) onCiclosChange(lista);
@@ -830,7 +830,7 @@ function CiclosManager({ onCiclosChange }) {
 
   async function delGrupo(cicloId, grupoId) {
     await api.deleteGrupo(grupoId);
-    const lista = ciclos.map(c => c.id === cicloId ? { ...c, grupos: c.grupos.filter(g => g.id !== grupoId) } : c);
+    const lista = ciclos.map(c => c.id === cicloId ? { ...c, módulos: c.grupos.filter(g => g.id !== grupoId) } : c);
     setCiclos(lista);
     if (onCiclosChange) onCiclosChange(lista);
   }
@@ -838,7 +838,7 @@ function CiclosManager({ onCiclosChange }) {
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-        <h3 style={{ margin:0, fontSize:15, fontWeight:700 }}>Ciclos y Grupos</h3>
+        <h3 style={{ margin:0, fontSize:15, fontWeight:700 }}>Ciclos y Módulos</h3>
       </div>
       <div style={{ display:'flex', gap:8, alignItems:'center' }}>
         <input value={newCiclo.codigo} onChange={e=>setNewCiclo(p=>({...p,codigo:e.target.value}))}
@@ -859,7 +859,7 @@ function CiclosManager({ onCiclosChange }) {
               <span style={{ background:'#4f46e5', color:'#fff', borderRadius:6,
                 padding:'2px 10px', fontWeight:800, fontSize:13 }}>{ciclo.codigo}</span>
               <span style={{ flex:1, fontWeight:600, fontSize:14, color:'#0f172a' }}>{ciclo.nombre}</span>
-              <span style={{ fontSize:12, color:'#94a3b8' }}>{ciclo.grupos.length} grupos</span>
+              <span style={{ fontSize:12, color:'#94a3b8' }}>{ciclo.grupos.length} módulos</span>
               <button onClick={()=>delCiclo(ciclo.id)} style={{ background:'none', border:'1px solid #fca5a5',
                 borderRadius:6, color:'#dc2626', padding:'3px 10px', fontSize:12, cursor:'pointer' }}>X Eliminar</button>
             </div>
@@ -873,12 +873,12 @@ function CiclosManager({ onCiclosChange }) {
                 </span>
               ))}
               <div style={{ display:'flex', gap:6 }}>
-                <input value={newGrupo[ciclo.id]||''} placeholder="Nuevo grupo..."
+                <input value={newGrupo[ciclo.id]||''} placeholder="Nuevo módulo..."
                   onChange={e=>setNewGrupo(p=>({...p,[ciclo.id]:e.target.value}))}
                   onKeyDown={e=>e.key==='Enter'&&addGrupo(ciclo.id)}
                   style={{ ...IS, width:140, padding:'4px 8px', fontSize:12 }}/>
                 <button onClick={()=>addGrupo(ciclo.id)} style={{ background:'#e0e7ff', color:'#4f46e5',
-                  border:'1px solid #c7d2fe', borderRadius:7, padding:'4px 12px', fontSize:12, cursor:'pointer' }}>+ Grupo</button>
+                  border:'1px solid #c7d2fe', borderRadius:7, padding:'4px 12px', fontSize:12, cursor:'pointer' }}>+ Módulo</button>
               </div>
             </div>
           </div>
@@ -918,7 +918,7 @@ function ImportacionMasiva({ onClose, onDone }) {
   const [paso,     setPaso]     = useState(1);
 
   useEffect(() => { api.getCiclos().then(setGrupos).catch(()=>{}); }, []);
-  const allGrupos = grupos.flatMap(c => c.grupos.map(g => ({ ...g, ciclo: c.codigo })));
+  const allGrupos = módulos.flatMap(c => c.grupos.map(g => ({ ...g, ciclo: c.codigo })));
 
   const IS = { background:'#fff', border:'1px solid #cbd5e1', borderRadius:8,
     color:'#0f172a', padding:'8px 12px', fontSize:13, outline:'none', width:'100%', boxSizing:'border-box' };
@@ -997,9 +997,9 @@ function ImportacionMasiva({ onClose, onDone }) {
                 </select>
               </div>
               <div>
-                <label style={{ fontSize:12, color:'#64748b', display:'block', marginBottom:4 }}>Grupo (opcional)</label>
+                <label style={{ fontSize:12, color:'#64748b', display:'block', marginBottom:4 }}>Módulo (opcional)</label>
                 <select value={grupoId} onChange={e => setGrupoId(e.target.value)} style={{ ...IS, cursor:'pointer' }}>
-                  <option value=''>-- Sin grupo --</option>
+                  <option value=''>-- Sin módulo --</option>
                   {grupos.flatMap(c =>
                     c.grupos.length > 0
                       ? c.grupos.map(g => (
@@ -1257,7 +1257,7 @@ export default function Dashboard({ cuadernos, setCuadernos, currentUser, onOpen
                     color:showCiclos?"#fff":"#7c3aed",
                     border:`1px solid ${showCiclos?"#1e1b4b":"#ddd6fe"}`,
                     borderRadius:9, padding:"10px 18px", fontSize:13, fontWeight:600, cursor:"pointer" }}>
-                    Ciclos y Grupos
+                    Ciclos y Módulos
                   </button>
                 </>
               )}
