@@ -383,10 +383,288 @@ function UserManager({ onRefresh }) {
   );
 }
 
+
+// ── Importación masiva de usuarios ────────────────────────────────────────
+function normalizar(str) {
+  return str.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function generarUsuario(nombre) {
+  // "García López, Ana" o "Ana García López" → "ana.garcia"
+  const limpio  = nombre.replace(',', ' ').trim();
+  const partes  = limpio.split(/\s+/).filter(Boolean);
+  if (partes.length === 0) return 'usuario';
+  if (partes.length === 1) return normalizar(partes[0]);
+  // Formato "Apellido Apellido, Nombre" → el último token antes de la coma es el nombre
+  const coma = nombre.indexOf(',');
+  if (coma > -1) {
+    const nombre1 = nombre.slice(coma + 1).trim().split(/\s+/)[0];
+    const apell1  = nombre.slice(0, coma).trim().split(/\s+/)[0];
+    return normalizar(nombre1) + '.' + normalizar(apell1);
+  }
+  // Sin coma: primer token = nombre, segundo = primer apellido
+  return normalizar(partes[0]) + '.' + normalizar(partes[1]);
+}
+
+function ImportacionMasiva({ onClose, onDone }) {
+  const [texto,    setTexto]    = useState('');
+  const [rol,      setRol]      = useState('alumno');
+  const [dominio,  setDominio]  = useState('@centro.es');
+  const [password, setPassword] = useState('cambiar1234');
+  const [preview,  setPreview]  = useState([]);
+  const [resultado,setResultado]= useState(null);
+  const [loading,  setLoading]  = useState(false);
+  const [paso,     setPaso]     = useState(1); // 1=entrada, 2=preview, 3=resultado
+
+  const IS = { background:'#fff', border:'1px solid #cbd5e1', borderRadius:8,
+    color:'#0f172a', padding:'8px 12px', fontSize:13, outline:'none',
+    width:'100%', boxSizing:'border-box' };
+
+  function parsear() {
+    const lineas = texto.split('\n').map(l => l.trim()).filter(Boolean);
+    const lista = lineas.map((linea, i) => {
+      // Formato flexible: nombre [| usuario] [| email]
+      const partes = linea.split('|').map(p => p.trim());
+      const nombre  = partes[0] || `Usuario ${i+1}`;
+      const usuario = partes[1] || generarUsuario(nombre);
+      const email   = partes[2] || (usuario + dominio);
+      const alumno_nombre = rol === 'alumno' ? nombre : null;
+      return { nombre, usuario, email, rol, password, alumno_nombre, _idx: i };
+    });
+    setPreview(lista);
+    setPaso(2);
+  }
+
+  function editarFila(idx, campo, valor) {
+    setPreview(prev => prev.map(u => u._idx === idx ? { ...u, [campo]: valor } : u));
+  }
+  function eliminarFila(idx) {
+    setPreview(prev => prev.filter(u => u._idx !== idx));
+  }
+
+  async function crear() {
+    setLoading(true);
+    const res = [];
+    for (const u of preview) {
+      try {
+        await api.createUsuario(u);
+        res.push({ ...u, ok: true });
+      } catch(e) {
+        res.push({ ...u, ok: false, error: e.message });
+      }
+    }
+    setResultado(res);
+    setPaso(3);
+    setLoading(false);
+    onDone();
+  }
+
+  const creados  = resultado?.filter(r => r.ok).length  || 0;
+  const errores  = resultado?.filter(r => !r.ok).length || 0;
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)',
+      display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:16 }}>
+      <div style={{ background:'#fff', borderRadius:16, width:'100%', maxWidth:700,
+        maxHeight:'90vh', display:'flex', flexDirection:'column',
+        boxShadow:'0 20px 60px rgba(0,0,0,0.2)' }}>
+
+        {/* Header */}
+        <div style={{ padding:'18px 24px', borderBottom:'1px solid #e2e8f0',
+          display:'flex', alignItems:'center', gap:12 }}>
+          <div style={{ flex:1 }}>
+            <h2 style={{ margin:0, fontSize:16, fontWeight:700, color:'#0f172a' }}>
+              Importacion masiva de usuarios
+            </h2>
+            <p style={{ margin:0, fontSize:12, color:'#64748b' }}>
+              {paso === 1 && 'Paso 1: Pega los nombres y configura opciones'}
+              {paso === 2 && `Paso 2: Revisa los ${preview.length} usuarios antes de crear`}
+              {paso === 3 && `Paso 3: Resultado — ${creados} creados, ${errores} errores`}
+            </p>
+          </div>
+          <button onClick={onClose} style={{ background:'none', border:'1px solid #e2e8f0',
+            borderRadius:8, padding:'6px 12px', cursor:'pointer', color:'#64748b' }}>X</button>
+        </div>
+
+        <div style={{ padding:'20px 24px', flex:1, overflowY:'auto', display:'flex', flexDirection:'column', gap:16 }}>
+
+          {/* ── PASO 1: Entrada ── */}
+          {paso === 1 && <>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10 }}>
+              <div>
+                <label style={{ fontSize:12, color:'#64748b', display:'block', marginBottom:4 }}>Rol para todos</label>
+                <select value={rol} onChange={e => setRol(e.target.value)} style={IS}>
+                  <option value="alumno">Alumno</option>
+                  <option value="docente">Docente</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize:12, color:'#64748b', display:'block', marginBottom:4 }}>Dominio email</label>
+                <input value={dominio} onChange={e => setDominio(e.target.value)}
+                  placeholder="@centro.es" style={IS}/>
+              </div>
+              <div>
+                <label style={{ fontSize:12, color:'#64748b', display:'block', marginBottom:4 }}>Contrasena inicial</label>
+                <input value={password} onChange={e => setPassword(e.target.value)}
+                  placeholder="cambiar1234" style={IS}/>
+              </div>
+            </div>
+
+            <div>
+              <label style={{ fontSize:12, color:'#64748b', display:'block', marginBottom:6 }}>
+                Nombres (uno por linea)
+              </label>
+              <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:8,
+                padding:'10px 12px', fontSize:11, color:'#94a3b8', marginBottom:8 }}>
+                Formatos aceptados:<br/>
+                <code style={{ color:'#4f46e5' }}>Garcia Lopez, Ana</code> — solo nombre (usuario y email se generan)<br/>
+                <code style={{ color:'#4f46e5' }}>Garcia Lopez, Ana | ana.garcia</code> — con usuario<br/>
+                <code style={{ color:'#4f46e5' }}>Garcia Lopez, Ana | ana.garcia | ana@ies.es</code> — completo
+              </div>
+              <textarea
+                value={texto}
+                onChange={e => setTexto(e.target.value)}
+                placeholder={"Garcia Lopez, Ana\nMartinez Ruiz, Carlos\nSanchez Perez, Elena\nRodriguez Gomez, Luis | luis.rodriguez | luis@ies.es"}
+                rows={12}
+                style={{ ...IS, fontFamily:'monospace', fontSize:13, resize:'vertical', lineHeight:1.6 }}
+              />
+              <div style={{ fontSize:12, color:'#94a3b8', marginTop:4 }}>
+                {texto.split('\n').filter(l => l.trim()).length} lineas
+              </div>
+            </div>
+
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={parsear}
+                disabled={!texto.trim()}
+                style={{ background: texto.trim() ? '#4f46e5' : '#94a3b8', color:'#fff',
+                  border:'none', borderRadius:8, padding:'10px 24px',
+                  fontSize:14, fontWeight:600, cursor: texto.trim() ? 'pointer' : 'not-allowed' }}>
+                Previsualizar →
+              </button>
+              <button onClick={onClose} style={{ background:'none', border:'1px solid #e2e8f0',
+                borderRadius:8, padding:'10px 16px', fontSize:13, color:'#64748b', cursor:'pointer' }}>
+                Cancelar
+              </button>
+            </div>
+          </>}
+
+          {/* ── PASO 2: Preview ── */}
+          {paso === 2 && <>
+            <div style={{ borderRadius:10, overflow:'auto', border:'1px solid #e2e8f0' }}>
+              <table style={{ width:'100%', borderCollapse:'collapse', minWidth:500 }}>
+                <thead>
+                  <tr style={{ background:'#f1f5f9' }}>
+                    {['Nombre completo','Usuario','Email','Rol',''].map(h => (
+                      <th key={h} style={{ padding:'8px 12px', fontSize:11, fontWeight:600,
+                        textTransform:'uppercase', letterSpacing:.6, color:'#475569',
+                        textAlign:'left', borderBottom:'1px solid #e2e8f0', whiteSpace:'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.map((u, i) => (
+                    <tr key={u._idx} style={{ background: i%2===0 ? '#fff' : '#f8fafc' }}>
+                      <td style={{ padding:'6px 12px' }}>
+                        <input value={u.nombre} onChange={e => editarFila(u._idx,'nombre',e.target.value)}
+                          style={{ border:'none', background:'transparent', fontSize:13,
+                            color:'#0f172a', width:'100%', outline:'none' }}/>
+                      </td>
+                      <td style={{ padding:'6px 12px' }}>
+                        <input value={u.usuario} onChange={e => editarFila(u._idx,'usuario',e.target.value)}
+                          style={{ border:'none', background:'transparent', fontSize:12,
+                            color:'#64748b', fontFamily:'monospace', width:'100%', outline:'none' }}/>
+                      </td>
+                      <td style={{ padding:'6px 12px' }}>
+                        <input value={u.email} onChange={e => editarFila(u._idx,'email',e.target.value)}
+                          style={{ border:'none', background:'transparent', fontSize:12,
+                            color:'#64748b', width:'100%', outline:'none' }}/>
+                      </td>
+                      <td style={{ padding:'6px 12px' }}>
+                        <select value={u.rol} onChange={e => editarFila(u._idx,'rol',e.target.value)}
+                          style={{ border:'none', background:'transparent', fontSize:12,
+                            color:'#475569', cursor:'pointer' }}>
+                          <option value="alumno">Alumno</option>
+                          <option value="docente">Docente</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </td>
+                      <td style={{ padding:'6px 8px' }}>
+                        <button onClick={() => eliminarFila(u._idx)}
+                          style={{ background:'none', border:'none', color:'#dc2626',
+                            fontSize:14, cursor:'pointer', padding:'2px 6px' }}>✕</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+              <button onClick={crear} disabled={loading || preview.length === 0}
+                style={{ background: preview.length ? '#059669' : '#94a3b8', color:'#fff',
+                  border:'none', borderRadius:8, padding:'10px 24px',
+                  fontSize:14, fontWeight:600, cursor: preview.length ? 'pointer' : 'not-allowed' }}>
+                {loading ? 'Creando...' : `Crear ${preview.length} usuarios`}
+              </button>
+              <button onClick={() => setPaso(1)} style={{ background:'none', border:'1px solid #e2e8f0',
+                borderRadius:8, padding:'10px 16px', fontSize:13, color:'#64748b', cursor:'pointer' }}>
+                Atras
+              </button>
+              <span style={{ fontSize:12, color:'#94a3b8', marginLeft:'auto' }}>
+                Contrasena inicial: <code style={{ color:'#4f46e5' }}>{password}</code>
+              </span>
+            </div>
+          </>}
+
+          {/* ── PASO 3: Resultado ── */}
+          {paso === 3 && <>
+            <div style={{ display:'flex', gap:12, marginBottom:8 }}>
+              <div style={{ flex:1, background:'#f0fdf4', border:'1px solid #bbf7d0',
+                borderRadius:10, padding:'14px 18px', textAlign:'center' }}>
+                <div style={{ fontSize:28, fontWeight:800, color:'#059669' }}>{creados}</div>
+                <div style={{ fontSize:13, color:'#065f46' }}>creados correctamente</div>
+              </div>
+              {errores > 0 && (
+                <div style={{ flex:1, background:'#fef2f2', border:'1px solid #fecaca',
+                  borderRadius:10, padding:'14px 18px', textAlign:'center' }}>
+                  <div style={{ fontSize:28, fontWeight:800, color:'#dc2626' }}>{errores}</div>
+                  <div style={{ fontSize:13, color:'#991b1b' }}>errores (ya existian o email duplicado)</div>
+                </div>
+              )}
+            </div>
+
+            {errores > 0 && (
+              <div style={{ borderRadius:8, overflow:'hidden', border:'1px solid #fecaca' }}>
+                {resultado.filter(r => !r.ok).map((r, i) => (
+                  <div key={i} style={{ padding:'8px 14px', background:i%2===0?'#fef2f2':'#fff5f5',
+                    fontSize:13, display:'flex', gap:12 }}>
+                    <span style={{ color:'#dc2626' }}>✕</span>
+                    <span style={{ color:'#0f172a', flex:1 }}>{r.nombre}</span>
+                    <span style={{ color:'#94a3b8' }}>{r.error}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <button onClick={onClose} style={{ background:'#4f46e5', color:'#fff',
+              border:'none', borderRadius:8, padding:'10px 24px',
+              fontSize:14, fontWeight:600, cursor:'pointer', alignSelf:'flex-start' }}>
+              Cerrar
+            </button>
+          </>}
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Dashboard principal ────────────────────────────────────────────────────
 export default function Dashboard({ cuadernos, setCuadernos, currentUser, onOpenCuaderno, onLogout }) {
   const [showNuevo,    setShowNuevo]    = useState(false);
   const [showUsuarios, setShowUsuarios] = useState(false);
+  const [showImport,   setShowImport]   = useState(false);
   const [inscModal,    setInscModal]    = useState(null); // cuaderno seleccionado
   const [docentes,     setDocentes]     = useState([]);
 
@@ -476,13 +754,21 @@ export default function Dashboard({ cuadernos, setCuadernos, currentUser, onOpen
                 {showNuevo ? "✕ Cancelar" : "+ Nuevo cuaderno"}
               </button>
               {rol === "admin" && (
-                <button onClick={()=>setShowUsuarios(v=>!v)} style={{
-                  background:showUsuarios?"#1e1b4b":"#fff",
-                  color:showUsuarios?"#fff":"#4f46e5",
-                  border:`1px solid ${showUsuarios?"#1e1b4b":"#c7d2fe"}`,
-                  borderRadius:9, padding:"10px 18px", fontSize:13, fontWeight:600, cursor:"pointer" }}>
-                  👥 Gestión de usuarios
-                </button>
+                <>
+                  <button onClick={()=>setShowUsuarios(v=>!v)} style={{
+                    background:showUsuarios?"#1e1b4b":"#fff",
+                    color:showUsuarios?"#fff":"#4f46e5",
+                    border:`1px solid ${showUsuarios?"#1e1b4b":"#c7d2fe"}`,
+                    borderRadius:9, padding:"10px 18px", fontSize:13, fontWeight:600, cursor:"pointer" }}>
+                    👥 Usuarios
+                  </button>
+                  <button onClick={()=>setShowImport(true)} style={{
+                    background:"#fff", color:"#059669",
+                    border:"1px solid #a7f3d0",
+                    borderRadius:9, padding:"10px 18px", fontSize:13, fontWeight:600, cursor:"pointer" }}>
+                    ⬆ Importar masivo
+                  </button>
+                </>
               )}
             </div>
 
@@ -549,6 +835,12 @@ export default function Dashboard({ cuadernos, setCuadernos, currentUser, onOpen
 
       {inscModal && (
         <InscripcionesModal cuaderno={inscModal} onClose={()=>setInscModal(null)}/>
+      )}
+      {showImport && (
+        <ImportacionMasiva
+          onClose={()=>setShowImport(false)}
+          onDone={async ()=>{ await api.getUsuarios('docente').then(setDocentes); }}
+        />
       )}
     </div>
   );
