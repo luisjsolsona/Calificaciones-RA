@@ -242,6 +242,105 @@ function tipoBadge(tipo) {
 // ─── PARSE HELPERS ────────────────────────────────────────────────────────────
 function parseSemicolonLine(line) { return line.split(";").map(s=>s.trim()); }
 
+// ─── RA CARD (fuera del padre → estado local sobrevive re-renders) ────────────
+function RACard({ ra, pesosPct, onUpdate, onRemove }) {
+  const prob = raProblemas(ra);
+  const inc  = prob.length > 0;
+  const [titulo,      setTitulo]      = useState(ra.titulo);
+  const [descripcion, setDescripcion] = useState(ra.descripcion);
+  const [pctAct,      setPctAct]      = useState(ra.pctAct ?? 40);
+  const [pctExam,     setPctExam]     = useState(ra.pctExam ?? 60);
+  // Sincronizar si el prop cambia desde fuera (tras guardar desde otro origen)
+  useEffect(() => setTitulo(ra.titulo),           [ra.titulo]);
+  useEffect(() => setDescripcion(ra.descripcion), [ra.descripcion]);
+  useEffect(() => { setPctAct(ra.pctAct??40); setPctExam(ra.pctExam??60); }, [ra.pctAct, ra.pctExam]);
+
+  function changePct(field, raw) {
+    const n = Math.min(100, Math.max(0, Number(raw)||0));
+    if (field === "act") { setPctAct(n); setPctExam(100-n); onUpdate({ pctAct:n, pctExam:100-n }); }
+    else                 { setPctExam(n); setPctAct(100-n); onUpdate({ pctExam:n, pctAct:100-n }); }
+  }
+
+  return (
+    <div style={{ background:inc?"#fef2f2":"#fff", border:`1px solid ${inc?"#fca5a5":"#e2e8f0"}`, borderRadius:12, padding:16, boxShadow:SH }}>
+      {inc && <div style={{ color:"#dc2626", fontSize:12, fontWeight:600, marginBottom:10 }}>⚠ {prob.join(" · ")}</div>}
+      <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
+        <span style={{ background:"#4f46e5", color:"#fff", borderRadius:6, padding:"2px 10px", fontWeight:700, fontSize:13, flexShrink:0 }}>{ra.id}</span>
+        <div style={{ flex:1, display:"flex", flexDirection:"column", gap:6 }}>
+          <input value={titulo} onChange={e=>setTitulo(e.target.value)}
+            onBlur={()=>onUpdate({ titulo })}
+            placeholder="Título *"
+            style={{ ...IS, border:!titulo?"1px solid #fca5a5":IS.border }}/>
+          <input value={descripcion} onChange={e=>setDescripcion(e.target.value)}
+            onBlur={()=>onUpdate({ descripcion })}
+            placeholder="Descripción" style={{ ...IS, fontSize:12 }}/>
+        </div>
+        <div style={{ textAlign:"center", flexShrink:0 }}>
+          <label style={{ color:"#64748b", fontSize:11, display:"block", marginBottom:4 }}>Peso RA (%)</label>
+          <input type="number" min={0} max={100} defaultValue={ra.peso??""} placeholder="Auto"
+            onBlur={e=>onUpdate({ peso:e.target.value===""?null:e.target.value })}
+            style={{ ...IS, width:72, textAlign:"center" }}/>
+          <div style={{ color:"#4f46e5", fontSize:11, marginTop:4 }}>{(pesosPct[ra.id]*100).toFixed(1)}%</div>
+        </div>
+        <button onClick={onRemove} style={{ ...DB, alignSelf:"flex-start" }}>✕</button>
+      </div>
+      <div style={{ height:3, background:"#f1f5f9", borderRadius:4, margin:"12px 0 14px", overflow:"hidden" }}>
+        <div style={{ width:`${pesosPct[ra.id]*100}%`, height:"100%", background:"#4f46e5", transition:"width .4s" }}/>
+      </div>
+      <div style={{ display:"flex", gap:14, alignItems:"center", flexWrap:"wrap" }}>
+        <span style={{ color:"#64748b", fontSize:12 }}>Ponderación nota RA:</span>
+        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+          <span style={{ color:"#0891b2", fontSize:12 }}>📋 Actividades</span>
+          <input type="number" min={0} max={100} value={pctAct}
+            onChange={e=>{ const n=Math.min(100,Math.max(0,Number(e.target.value)||0)); setPctAct(n); setPctExam(100-n); }}
+            onBlur={()=>onUpdate({ pctAct, pctExam })}
+            style={{ ...IS, width:58, padding:"4px 8px", textAlign:"center" }}/>
+          <span style={{ color:"#64748b", fontSize:12 }}>%</span>
+        </div>
+        <span style={{ color:"#cbd5e1" }}>+</span>
+        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+          <span style={{ color:"#7c3aed", fontSize:12 }}>📄 Exámenes</span>
+          <input type="number" min={0} max={100} value={pctExam}
+            onChange={e=>{ const n=Math.min(100,Math.max(0,Number(e.target.value)||0)); setPctExam(n); setPctAct(100-n); }}
+            onBlur={()=>onUpdate({ pctAct, pctExam })}
+            style={{ ...IS, width:58, padding:"4px 8px", textAlign:"center" }}/>
+          <span style={{ color:"#64748b", fontSize:12 }}>%</span>
+        </div>
+        <div style={{ flex:1, minWidth:100, height:8, background:"#f1f5f9", borderRadius:4, overflow:"hidden", display:"flex" }}>
+          <div style={{ width:`${pctAct}%`, background:"#0891b2", transition:"width .3s" }}/>
+          <div style={{ width:`${pctExam}%`, background:"#7c3aed", transition:"width .3s" }}/>
+        </div>
+        {pctAct+pctExam!==100 && <span style={{ color:"#dc2626", fontSize:11 }}>⚠ Suma {pctAct+pctExam}%</span>}
+      </div>
+    </div>
+  );
+}
+
+// ─── UD CARD (fuera del padre → estado local sobrevive re-renders) ────────────
+function UDCard({ ud, onUpdate, onRemove }) {
+  const prob = udProblemas(ud);
+  const inc  = prob.length > 0;
+  const [titulo,      setTitulo]      = useState(ud.titulo);
+  const [descripcion, setDescripcion] = useState(ud.descripcion);
+  useEffect(() => setTitulo(ud.titulo),           [ud.titulo]);
+  useEffect(() => setDescripcion(ud.descripcion), [ud.descripcion]);
+
+  return (
+    <div style={{ display:"flex", gap:10, alignItems:"center", background:inc?"#fef2f2":"#fff", border:`1px solid ${inc?"#fca5a5":"#e2e8f0"}`, borderRadius:10, padding:"10px 12px" }}>
+      <span style={{ color:"#4f46e5", fontWeight:700, fontSize:13, flexShrink:0 }}>{ud.id}</span>
+      {inc && <span style={{ color:"#dc2626", fontSize:11, flexShrink:0 }}>⚠ {prob.join(" · ")}</span>}
+      <input value={titulo} onChange={e=>setTitulo(e.target.value)}
+        onBlur={()=>onUpdate({ titulo })}
+        placeholder="Título *"
+        style={{ ...IS, flex:1, border:!titulo?"1px solid #fca5a5":IS.border }}/>
+      <input value={descripcion} onChange={e=>setDescripcion(e.target.value)}
+        onBlur={()=>onUpdate({ descripcion })}
+        placeholder="Descripción" style={{ ...IS, flex:2, fontSize:12 }}/>
+      <button onClick={onRemove} style={DB}>✕</button>
+    </div>
+  );
+}
+
 // ─── COMPONENTE PRINCIPAL ────────────────────────────────────────────────────
 export default function CuadernoCalificaciones() {
   const [tab, setTab]                 = useState("resumen");
@@ -626,10 +725,6 @@ export default function CuadernoCalificaciones() {
   // ── RAs ──────────────────────────────────────────────────────────────────
   function TabRAs() {
     const pesosPct = useMemo(()=>calcPesosRA(ras),[ras]);
-    function updatePct(raId,field,val) {
-      const num=Math.min(100,Math.max(0,Number(val)||0));
-      setRAs(prev=>prev.map(r=>r.id!==raId?r:field==="pctAct"?{...r,pctAct:num,pctExam:100-num}:{...r,pctExam:num,pctAct:100-num}));
-    }
     return (
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
@@ -646,58 +741,11 @@ export default function CuadernoCalificaciones() {
             onClose={()=>setShowImportRAs(false)}
           />
         )}
-        {ras.map(ra=>{
-          const prob = raProblemas(ra);
-          const inc  = prob.length>0;
-          return (
-            <div key={ra.id} style={{ background:inc?"#fef2f2":"#fff", border:`1px solid ${inc?"#fca5a5":"#e2e8f0"}`, borderRadius:12, padding:16, boxShadow:SH }}>
-              {inc && <div style={{ color:"#dc2626", fontSize:12, fontWeight:600, marginBottom:10 }}>⚠ {prob.join(" · ")}</div>}
-              <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
-                <span style={{ background:"#4f46e5", color:"#fff", borderRadius:6, padding:"2px 10px", fontWeight:700, fontSize:13, flexShrink:0 }}>{ra.id}</span>
-                <div style={{ flex:1, display:"flex", flexDirection:"column", gap:6 }}>
-                  <input defaultValue={ra.titulo} placeholder="Título *"
-                    onBlur={e=>setRAs(prev=>prev.map(r=>r.id===ra.id?{...r,titulo:e.target.value}:r))}
-                    style={{ ...IS, border:!ra.titulo?"1px solid #fca5a5":IS.border }}/>
-                  <input defaultValue={ra.descripcion} placeholder="Descripción"
-                    onBlur={e=>setRAs(prev=>prev.map(r=>r.id===ra.id?{...r,descripcion:e.target.value}:r))}
-                    style={{ ...IS, fontSize:12 }}/>
-                </div>
-                <div style={{ textAlign:"center", flexShrink:0 }}>
-                  <label style={{ color:"#64748b", fontSize:11, display:"block", marginBottom:4 }}>Peso RA (%)</label>
-                  <input type="number" min={0} max={100} defaultValue={ra.peso??""} placeholder="Auto"
-                    onBlur={e=>setRAs(prev=>prev.map(r=>r.id===ra.id?{...r,peso:e.target.value===""?null:e.target.value}:r))}
-                    style={{ ...IS, width:72, textAlign:"center" }}/>
-                  <div style={{ color:"#4f46e5", fontSize:11, marginTop:4 }}>{(pesosPct[ra.id]*100).toFixed(1)}%</div>
-                </div>
-                <button onClick={()=>removeRA(ra.id)} style={{ ...DB, alignSelf:"flex-start" }}>✕</button>
-              </div>
-              <div style={{ height:3, background:"#f1f5f9", borderRadius:4, margin:"12px 0 14px", overflow:"hidden" }}>
-                <div style={{ width:`${pesosPct[ra.id]*100}%`, height:"100%", background:"#4f46e5", transition:"width .4s" }}/>
-              </div>
-              <div style={{ display:"flex", gap:14, alignItems:"center", flexWrap:"wrap" }}>
-                <span style={{ color:"#64748b", fontSize:12 }}>Ponderación nota RA:</span>
-                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                  <span style={{ color:"#0891b2", fontSize:12 }}>📋 Actividades</span>
-                  <input type="number" min={0} max={100} defaultValue={ra.pctAct??40} onBlur={e=>updatePct(ra.id,"pctAct",e.target.value)}
-                    style={{ ...IS, width:58, padding:"4px 8px", textAlign:"center" }}/>
-                  <span style={{ color:"#64748b", fontSize:12 }}>%</span>
-                </div>
-                <span style={{ color:"#cbd5e1" }}>+</span>
-                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                  <span style={{ color:"#7c3aed", fontSize:12 }}>📄 Exámenes</span>
-                  <input type="number" min={0} max={100} defaultValue={ra.pctExam??60} onBlur={e=>updatePct(ra.id,"pctExam",e.target.value)}
-                    style={{ ...IS, width:58, padding:"4px 8px", textAlign:"center" }}/>
-                  <span style={{ color:"#64748b", fontSize:12 }}>%</span>
-                </div>
-                <div style={{ flex:1, minWidth:100, height:8, background:"#f1f5f9", borderRadius:4, overflow:"hidden", display:"flex" }}>
-                  <div style={{ width:`${ra.pctAct??40}%`, background:"#0891b2", transition:"width .3s" }}/>
-                  <div style={{ width:`${ra.pctExam??60}%`, background:"#7c3aed", transition:"width .3s" }}/>
-                </div>
-                {(ra.pctAct??40)+(ra.pctExam??60)!==100 && <span style={{ color:"#dc2626", fontSize:11 }}>⚠ Suma {(ra.pctAct??40)+(ra.pctExam??60)}%</span>}
-              </div>
-            </div>
-          );
-        })}
+        {ras.map(ra=>(
+          <RACard key={ra.id} ra={ra} pesosPct={pesosPct}
+            onUpdate={fields=>setRAs(prev=>prev.map(r=>r.id===ra.id?{...r,...fields}:r))}
+            onRemove={()=>removeRA(ra.id)}/>
+        ))}
         <button onClick={()=>{ const id="RA"+(ras.length+1); setRAs(prev=>[...prev,{id,titulo:"",descripcion:"",peso:null,pctAct:40,pctExam:60}]); }} style={BS}>+ Añadir RA</button>
       </div>
     );
@@ -745,23 +793,11 @@ export default function CuadernoCalificaciones() {
           </table>
         </div>
         <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-          {uds.map(ud=>{
-            const prob = udProblemas(ud);
-            const inc  = prob.length>0;
-            return (
-              <div key={ud.id} style={{ display:"flex", gap:10, alignItems:"center", background:inc?"#fef2f2":"#fff", border:`1px solid ${inc?"#fca5a5":"#e2e8f0"}`, borderRadius:10, padding:"10px 12px" }}>
-                <span style={{ color:"#4f46e5", fontWeight:700, fontSize:13, flexShrink:0 }}>{ud.id}</span>
-                {inc && <span style={{ color:"#dc2626", fontSize:11, flexShrink:0 }}>⚠ {prob.join(" · ")}</span>}
-                <input defaultValue={ud.titulo}
-                  onBlur={e=>setUDs(prev=>prev.map(u=>u.id===ud.id?{...u,titulo:e.target.value}:u))}
-                  placeholder="Título *" style={{ ...IS, flex:1, border:!ud.titulo?"1px solid #fca5a5":IS.border }}/>
-                <input defaultValue={ud.descripcion}
-                  onBlur={e=>setUDs(prev=>prev.map(u=>u.id===ud.id?{...u,descripcion:e.target.value}:u))}
-                  placeholder="Descripción" style={{ ...IS, flex:2, fontSize:12 }}/>
-                <button onClick={()=>removeUD(ud.id)} style={DB}>✕</button>
-              </div>
-            );
-          })}
+          {uds.map(ud=>(
+            <UDCard key={ud.id} ud={ud}
+              onUpdate={fields=>setUDs(prev=>prev.map(u=>u.id===ud.id?{...u,...fields}:u))}
+              onRemove={()=>removeUD(ud.id)}/>
+          ))}
         </div>
         <button onClick={()=>{ const id="UD"+(uds.length+1); setUDs(prev=>[...prev,{id,titulo:"",descripcion:"",ras:[]}]); }} style={BS}>+ Añadir UD</button>
       </div>
