@@ -6,7 +6,7 @@ services:
       context: .
     ports:
       - target: 80
-        published: "8000"
+        published: "8500"
         protocol: tcp
     restart: unless-stopped
     network_mode: bridge
@@ -24,7 +24,7 @@ x-casaos:
   main: cuaderno
   scheme: http
   index: /
-  port_map: "8000"
+  port_map: "8500"
   title:
     en_us: Cuaderno Calificaciones RA
     es_es: Cuaderno Calificaciones RA
