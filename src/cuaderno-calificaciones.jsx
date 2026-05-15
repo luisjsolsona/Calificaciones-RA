@@ -889,6 +889,15 @@ export default function CuadernoCalificaciones({
   }
   function removeAlumno(id)    { setAlumnos(prev=>prev.filter(a=>a.id!==id)); }
   function removeActividad(id) { setActividades(prev=>prev.filter(a=>a.id!==id)); if(editingActId===id) setEditingActId(null); }
+  function igualarPesos(raId, tipo) {
+    setActividades(prev => {
+      const grupo = prev.filter(a=>a.ras.includes(raId)&&a.tipo===tipo);
+      const count = grupo.length; if (!count) return prev;
+      const base = Math.floor(100/count), rem = 100 - base*count;
+      const map  = new Map(grupo.map((a,i)=>[a.id, base+(i<rem?1:0)]));
+      return prev.map(a=>map.has(a.id)?{...a,peso:map.get(a.id)}:a);
+    });
+  }
   function updateActividad(id, fields) { setActividades(prev=>prev.map(a=>a.id===id?{...a,...fields}:a)); }
   function removeRA(raId) {
     setRAs(prev=>prev.filter(r=>r.id!==raId));
@@ -1276,13 +1285,31 @@ export default function CuadernoCalificaciones({
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr" }}>
                 <div style={{ borderRight:"1px solid #f1f5f9", padding:12 }}>
-                  <span style={{ color:"#0891b2", fontSize:11, fontWeight:600, textTransform:"uppercase", letterSpacing:.8, display:"block", marginBottom:8 }}>📋 Actividades</span>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+                    <span style={{ color:"#0891b2", fontSize:11, fontWeight:600, textTransform:"uppercase", letterSpacing:.8 }}>📋 Actividades</span>
+                    {acts.length>1 && (
+                      <button onClick={()=>igualarPesos(ra.id,"actividad")}
+                        title="Distribuir pesos iguales (100% / nº actividades)"
+                        style={{ fontSize:10, color:"#0891b2", background:"#ecfeff", border:"1px solid #a5f3fc", borderRadius:5, padding:"2px 8px", cursor:"pointer" }}>
+                        ⟳ Igualar
+                      </button>
+                    )}
+                  </div>
                   {acts.map((act,idx)=><ActRow key={act.id} act={act} raId={ra.id} tipo="actividad" idx={idx}/>)}
                   <DropEnd raId={ra.id} tipo="actividad"/>
                   {acts.length>0 && <PesoBadge total={totalAct} ok={okAct}/>}
                 </div>
                 <div style={{ padding:12 }}>
-                  <span style={{ color:"#7c3aed", fontSize:11, fontWeight:600, textTransform:"uppercase", letterSpacing:.8, display:"block", marginBottom:8 }}>📄 Exámenes</span>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+                    <span style={{ color:"#7c3aed", fontSize:11, fontWeight:600, textTransform:"uppercase", letterSpacing:.8 }}>📄 Exámenes</span>
+                    {exams.length>1 && (
+                      <button onClick={()=>igualarPesos(ra.id,"examen")}
+                        title="Distribuir pesos iguales (100% / nº exámenes)"
+                        style={{ fontSize:10, color:"#7c3aed", background:"#f5f3ff", border:"1px solid #ddd6fe", borderRadius:5, padding:"2px 8px", cursor:"pointer" }}>
+                        ⟳ Igualar
+                      </button>
+                    )}
+                  </div>
                   {exams.map((act,idx)=><ActRow key={act.id} act={act} raId={ra.id} tipo="examen" idx={idx}/>)}
                   <DropEnd raId={ra.id} tipo="examen"/>
                   {exams.length>0 && <PesoBadge total={totalExam} ok={okExam}/>}
