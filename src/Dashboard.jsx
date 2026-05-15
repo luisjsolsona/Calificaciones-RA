@@ -791,6 +791,8 @@ function CiclosManager({ onCiclosChange }) {
   const [ciclos,    setCiclos]    = useState([]);
   const [newCiclo,  setNewCiclo]  = useState({ nombre:'', codigo:'' });
   const [newGrupo,  setNewGrupo]  = useState({});
+  const [editCiclo, setEditCiclo] = useState(null);
+  const [editGrupo, setEditGrupo] = useState(null);
 
   useEffect(() => { api.getCiclos().then(setCiclos).catch(console.error); }, []);
 
@@ -802,14 +804,24 @@ function CiclosManager({ onCiclosChange }) {
     try {
       const c = await api.createCiclo(newCiclo);
       const lista = [...ciclos, c];
-      setCiclos(lista);
-      setNewCiclo({ nombre:'', codigo:'' });
+      setCiclos(lista); setNewCiclo({ nombre:'', codigo:'' });
+      if (onCiclosChange) onCiclosChange(lista);
+    } catch(e) { alert(e.message); }
+  }
+
+  async function saveCiclo() {
+    if (!editCiclo.nombre.trim() || !editCiclo.codigo.trim()) return;
+    try {
+      await api.updateCiclo(editCiclo.id, { nombre: editCiclo.nombre, codigo: editCiclo.codigo });
+      const lista = ciclos.map(c => c.id === editCiclo.id
+        ? { ...c, nombre: editCiclo.nombre, codigo: editCiclo.codigo.toUpperCase() } : c);
+      setCiclos(lista); setEditCiclo(null);
       if (onCiclosChange) onCiclosChange(lista);
     } catch(e) { alert(e.message); }
   }
 
   async function delCiclo(id) {
-    if (!confirm('Eliminar ciclo y todos sus módulos?')) return;
+    if (!confirm('Eliminar ciclo y todos sus modulos?')) return;
     await api.deleteCiclo(id);
     const lista = ciclos.filter(c => c.id !== id);
     setCiclos(lista);
@@ -821,25 +833,36 @@ function CiclosManager({ onCiclosChange }) {
     if (!nombre) return;
     try {
       const g = await api.createGrupo(cicloId, { nombre });
-      const lista = ciclos.map(c => c.id === cicloId ? { ...c, módulos: [...c.grupos, g] } : c);
-      setCiclos(lista);
-      setNewGrupo(prev => ({ ...prev, [cicloId]: '' }));
+      const lista = ciclos.map(c => c.id === cicloId ? { ...c, grupos: [...c.grupos, g] } : c);
+      setCiclos(lista); setNewGrupo(prev => ({ ...prev, [cicloId]: '' }));
+      if (onCiclosChange) onCiclosChange(lista);
+    } catch(e) { alert(e.message); }
+  }
+
+  async function saveGrupo() {
+    if (!editGrupo.nombre.trim()) return;
+    try {
+      await api.updateGrupo(editGrupo.id, { nombre: editGrupo.nombre });
+      const lista = ciclos.map(c => ({
+        ...c, grupos: c.grupos.map(g => g.id === editGrupo.id ? { ...g, nombre: editGrupo.nombre } : g)
+      }));
+      setCiclos(lista); setEditGrupo(null);
       if (onCiclosChange) onCiclosChange(lista);
     } catch(e) { alert(e.message); }
   }
 
   async function delGrupo(cicloId, grupoId) {
     await api.deleteGrupo(grupoId);
-    const lista = ciclos.map(c => c.id === cicloId ? { ...c, módulos: c.grupos.filter(g => g.id !== grupoId) } : c);
+    const lista = ciclos.map(c =>
+      c.id === cicloId ? { ...c, grupos: c.grupos.filter(g => g.id !== grupoId) } : c);
     setCiclos(lista);
     if (onCiclosChange) onCiclosChange(lista);
   }
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-        <h3 style={{ margin:0, fontSize:15, fontWeight:700 }}>Ciclos y Módulos</h3>
-      </div>
+      <h3 style={{ margin:0, fontSize:15, fontWeight:700 }}>Ciclos y Módulos</h3>
+
       <div style={{ display:'flex', gap:8, alignItems:'center' }}>
         <input value={newCiclo.codigo} onChange={e=>setNewCiclo(p=>({...p,codigo:e.target.value}))}
           placeholder="COD (SMR, IFC...)" style={{ ...IS, width:120 }}/>
@@ -847,36 +870,72 @@ function CiclosManager({ onCiclosChange }) {
           onKeyDown={e=>e.key==='Enter'&&addCiclo()}
           placeholder="Nombre del ciclo" style={{ ...IS, flex:1 }}/>
         <button onClick={addCiclo} style={{ background:'#4f46e5', color:'#fff', border:'none',
-          borderRadius:8, padding:'8px 16px', fontSize:13, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap' }}>
+          borderRadius:8, padding:'8px 16px', fontSize:13, fontWeight:600, cursor:'pointer' }}>
           + Ciclo
         </button>
       </div>
+
       {ciclos.length === 0
         ? <p style={{ color:'#94a3b8', fontSize:13 }}>No hay ciclos. Crea el primero.</p>
         : ciclos.map(ciclo => (
           <div key={ciclo.id} style={{ border:'1px solid #e2e8f0', borderRadius:10, overflow:'hidden' }}>
-            <div style={{ background:'#f1f5f9', padding:'10px 14px', display:'flex', alignItems:'center', gap:10 }}>
-              <span style={{ background:'#4f46e5', color:'#fff', borderRadius:6,
-                padding:'2px 10px', fontWeight:800, fontSize:13 }}>{ciclo.codigo}</span>
-              <span style={{ flex:1, fontWeight:600, fontSize:14, color:'#0f172a' }}>{ciclo.nombre}</span>
-              <span style={{ fontSize:12, color:'#94a3b8' }}>{ciclo.grupos.length} módulos</span>
-              <button onClick={()=>delCiclo(ciclo.id)} style={{ background:'none', border:'1px solid #fca5a5',
-                borderRadius:6, color:'#dc2626', padding:'3px 10px', fontSize:12, cursor:'pointer' }}>X Eliminar</button>
-            </div>
+
+            {editCiclo?.id === ciclo.id ? (
+              <div style={{ background:'#f1f5f9', padding:'10px 14px', display:'flex', alignItems:'center', gap:8 }}>
+                <input value={editCiclo.codigo} onChange={e=>setEditCiclo(p=>({...p,codigo:e.target.value}))}
+                  style={{ ...IS, width:90, padding:'4px 8px', fontSize:13 }}/>
+                <input value={editCiclo.nombre} autoFocus
+                  onChange={e=>setEditCiclo(p=>({...p,nombre:e.target.value}))}
+                  onKeyDown={e=>{ if(e.key==='Enter') saveCiclo(); if(e.key==='Escape') setEditCiclo(null); }}
+                  style={{ ...IS, flex:1, padding:'4px 8px', fontSize:13 }}/>
+                <button onClick={saveCiclo} style={{ background:'#059669', color:'#fff', border:'none',
+                  borderRadius:6, padding:'5px 14px', fontSize:12, fontWeight:600, cursor:'pointer' }}>Guardar</button>
+                <button onClick={()=>setEditCiclo(null)} style={{ background:'none', border:'1px solid #e2e8f0',
+                  borderRadius:6, padding:'5px 10px', fontSize:12, cursor:'pointer', color:'#64748b' }}>Cancelar</button>
+              </div>
+            ) : (
+              <div style={{ background:'#f1f5f9', padding:'10px 14px', display:'flex', alignItems:'center', gap:10 }}>
+                <span style={{ background:'#4f46e5', color:'#fff', borderRadius:6,
+                  padding:'2px 10px', fontWeight:800, fontSize:13 }}>{ciclo.codigo}</span>
+                <span style={{ flex:1, fontWeight:600, fontSize:14, color:'#0f172a' }}>{ciclo.nombre}</span>
+                <span style={{ fontSize:12, color:'#94a3b8' }}>{ciclo.grupos.length} módulos</span>
+                <button onClick={()=>setEditCiclo({ id:ciclo.id, nombre:ciclo.nombre, codigo:ciclo.codigo })}
+                  style={{ background:'none', border:'1px solid #e2e8f0', borderRadius:6,
+                    color:'#4f46e5', padding:'3px 10px', fontSize:12, cursor:'pointer' }}>✏ Editar</button>
+                <button onClick={()=>delCiclo(ciclo.id)} style={{ background:'none', border:'1px solid #fca5a5',
+                  borderRadius:6, color:'#dc2626', padding:'3px 10px', fontSize:12, cursor:'pointer' }}>Eliminar</button>
+              </div>
+            )}
+
             <div style={{ padding:'10px 14px', display:'flex', flexWrap:'wrap', gap:8, alignItems:'center' }}>
-              {ciclo.grupos.map(g => (
-                <span key={g.id} style={{ background:'#eef2ff', color:'#4f46e5', border:'1px solid #c7d2fe',
-                  borderRadius:20, padding:'4px 12px', fontSize:13, display:'flex', alignItems:'center', gap:6 }}>
-                  {g.nombre}
-                  <button onClick={()=>delGrupo(ciclo.id,g.id)} style={{ background:'none', border:'none',
-                    color:'#94a3b8', cursor:'pointer', padding:0, fontSize:12, lineHeight:1 }}>x</button>
-                </span>
-              ))}
+              {ciclo.grupos.map(g =>
+                editGrupo?.id === g.id ? (
+                  <span key={g.id} style={{ display:'flex', alignItems:'center', gap:4 }}>
+                    <input value={editGrupo.nombre} autoFocus
+                      onChange={e=>setEditGrupo(p=>({...p,nombre:e.target.value}))}
+                      onKeyDown={e=>{ if(e.key==='Enter') saveGrupo(); if(e.key==='Escape') setEditGrupo(null); }}
+                      style={{ ...IS, width:120, padding:'3px 8px', fontSize:12 }}/>
+                    <button onClick={saveGrupo} style={{ background:'#059669', color:'#fff', border:'none',
+                      borderRadius:6, padding:'3px 8px', fontSize:11, cursor:'pointer' }}>OK</button>
+                    <button onClick={()=>setEditGrupo(null)} style={{ background:'none', border:'1px solid #e2e8f0',
+                      borderRadius:6, padding:'3px 6px', fontSize:11, cursor:'pointer', color:'#64748b' }}>X</button>
+                  </span>
+                ) : (
+                  <span key={g.id} style={{ background:'#eef2ff', color:'#4f46e5', border:'1px solid #c7d2fe',
+                    borderRadius:20, padding:'4px 10px', fontSize:13, display:'flex', alignItems:'center', gap:6 }}>
+                    {g.nombre}
+                    <button onClick={()=>setEditGrupo({ id:g.id, nombre:g.nombre })}
+                      style={{ background:'none', border:'none', cursor:'pointer', color:'#6366f1', padding:0, fontSize:11 }}>✏</button>
+                    <button onClick={()=>delGrupo(ciclo.id,g.id)}
+                      style={{ background:'none', border:'none', cursor:'pointer', color:'#94a3b8', padding:0, fontSize:12 }}>x</button>
+                  </span>
+                )
+              )}
               <div style={{ display:'flex', gap:6 }}>
                 <input value={newGrupo[ciclo.id]||''} placeholder="Nuevo módulo..."
                   onChange={e=>setNewGrupo(p=>({...p,[ciclo.id]:e.target.value}))}
                   onKeyDown={e=>e.key==='Enter'&&addGrupo(ciclo.id)}
-                  style={{ ...IS, width:140, padding:'4px 8px', fontSize:12 }}/>
+                  style={{ ...IS, width:150, padding:'4px 8px', fontSize:12 }}/>
                 <button onClick={()=>addGrupo(ciclo.id)} style={{ background:'#e0e7ff', color:'#4f46e5',
                   border:'1px solid #c7d2fe', borderRadius:7, padding:'4px 12px', fontSize:12, cursor:'pointer' }}>+ Módulo</button>
               </div>

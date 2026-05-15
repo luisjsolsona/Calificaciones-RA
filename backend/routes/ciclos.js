@@ -18,6 +18,24 @@ router.post('/', auth(['admin']), (req, res) => {
   } catch { res.status(409).json({ error: 'Código ya existe' }); }
 });
 
+// PUT /api/ciclos/:id — editar ciclo
+router.put('/:id', auth(['admin']), (req, res) => {
+  const { nombre, codigo } = req.body;
+  try {
+    db.prepare('UPDATE ciclos SET nombre=?,codigo=? WHERE id=?').run(nombre, codigo.toUpperCase(), req.params.id);
+    res.json({ ok: true });
+  } catch { res.status(409).json({ error: 'Codigo ya existe' }); }
+});
+
+// PUT /api/ciclos/grupo/:id — editar modulo
+router.put('/grupo/:id', auth(['admin']), (req, res) => {
+  const { nombre } = req.body;
+  try {
+    db.prepare('UPDATE grupos SET nombre=? WHERE id=?').run(nombre, req.params.id);
+    res.json({ ok: true });
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+
 // DELETE /api/ciclos/:id
 router.delete('/:id', auth(['admin']), (req, res) => {
   db.prepare('UPDATE usuarios SET grupo_id=NULL WHERE grupo_id IN (SELECT id FROM grupos WHERE ciclo_id=?)').run(req.params.id);
