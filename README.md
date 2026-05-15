@@ -1,170 +1,134 @@
-# 📒 Cuaderno de Calificaciones RA
+# Cuaderno de Calificaciones RA
 
-Aplicación web para la gestión de calificaciones en **Formación Profesional** (España), basada en **Resultados de Aprendizaje (RA)**. Calcula automáticamente las notas ponderadas por RA y la nota final del módulo.
+Aplicacion web para gestionar calificaciones en **Formacion Profesional** basada en Resultados de Aprendizaje (RA). Disenada para centros educativos con multiples docentes y grupos de alumnos.
+
+## Caracteristicas principales
+
+### Gestion academica
+- Configuracion de **Resultados de Aprendizaje** con pesos ponderados
+- **Unidades Didacticas** asociadas a RAs
+- **Actividades y examenes** con pesos individuales por RA
+- Calculo automatico de notas: `Nota RA = (media_act x pctAct%) + (media_exam x pctExam%)`
+- Nota final ponderada por el peso de cada RA
+- Vista grafica por alumno (radar + barras por RA)
+
+### Sistema multiusuario con backend
+- Tres roles: **Admin**, **Docente**, **Alumno**
+- Autenticacion por JWT (email o usuario corto + contrasena)
+- Sesion persistente entre recargas
+- Base de datos SQLite en volumen Docker (datos persistentes)
+
+### Estructura organizativa
+- **Ciclos** (SMR, IFC, DAW...) con su codigo y nombre
+- **Grupos** dentro de cada ciclo (1SMR, 2SMR, 1DAW...)
+- Usuarios asignados a grupos para filtrado rapido
+
+### Gestion de usuarios
+- Panel de **Usuarios** con filtros por nombre, rol y grupo
+- **Importacion masiva**: pega una lista de nombres, elige rol y grupo, previsualiza y crea todos de una vez
+- Formato flexible: `Apellido, Nombre`, `Apellido, Nombre | usuario`, `Apellido, Nombre | usuario | email`
+- Usuarios y emails generados automaticamente desde el nombre
+
+### Cuadernos de calificaciones
+- Cada docente gestiona sus propios cuadernos
+- Los alumnos se asignan mediante **Inscripciones** (boton en cada tarjeta)
+- Filtro por ciclo/grupo en el modal de inscripciones
+- El cuaderno se crea vacio, listo para configurar
+
+### Vista del alumno
+- Los alumnos se autentican y ven solo sus modulos asignados
+- Vista de sus notas por RA y actividad (solo lectura)
 
 ---
 
-## Características
-
-| Función | Detalle |
-|---|---|
-| **Resultados de Aprendizaje** | Configura pesos y la ponderación Actividades/Exámenes de cada RA |
-| **Unidades Didácticas** | Asocia UDs a los RAs correspondientes |
-| **Actividades y Exámenes** | Con peso, tipo, RA y UD. Arrastrar para reordenar |
-| **Calificaciones** | Tabla editable con cálculo automático en tiempo real |
-| **Gráficos** | Distribución, media por RA, perfil radar por alumno |
-| **Guardado automático** | Los datos persisten en el navegador (localStorage) |
-| **Importar / Exportar** | Por entidad y backup completo en JSON |
-| **⚠ Alertas** | Actividades resaltadas en rojo si falta RA, UD o peso |
-| **Tema claro** | Diseño limpio con tonos blancos |
-
----
-
-## Ejecución con Docker
-
-La forma más sencilla. Compatible con **Windows, Mac y Linux**.
+## Despliegue con Docker
 
 ```bash
-# Construir y arrancar
-docker compose up --build
-
-# Abrir en el navegador:
-# http://localhost:8000
+git clone https://github.com/luisjsolsona/Calificaciones-RA.git
+cd Calificaciones-RA
+docker compose up -d --build
 ```
 
-Para parar:
-```bash
-docker compose down
-```
+Accede en: `http://tu-servidor:8500`
+
+**Acceso inicial:**
+- Usuario: `admin` / Contrasena: `admin1234`
+
+### Arquitectura Docker
+
+| Servicio | Puerto interno | Descripcion |
+|----------|---------------|-------------|
+| `cuaderno` | 80 | Frontend React + Nginx (proxy `/api`) |
+| `backend`  | 3001 | API REST Node.js + Express |
+| Volumen `db-data` | — | Base de datos SQLite persistente |
 
 ---
 
 ## Desarrollo local
 
-Requiere Node.js 18+.
+**Requisitos:** Node.js 20+
 
 ```bash
+# Frontend
 npm install
-npm run dev        # servidor de desarrollo → http://localhost:5173
-npm run build      # compilar para producción
-npm run preview    # previsualizar el build
+npm run dev
+
+# Backend
+cd backend
+npm install
+node server.js
 ```
 
 ---
 
-## Importar y Exportar datos
+## Flujo de uso recomendado
 
-### Backup completo (cabecera)
-- **↓ Backup** — descarga un JSON con todos los datos (alumnos, RAs, UDs, actividades)
-- **↑ Restaurar** — carga un backup completo
-
-### Por entidad (cada pestaña)
-Cada pestaña tiene sus propios botones **↓ Exportar** / **↑ Importar**.
-
-Al importar puedes:
-- **Pegar directamente** (Ctrl+V) en el textarea → se detecta el contenido
-- **Cargar desde archivo** (`.json` o `.txt`)
-- Elegir entre **Añadir a existentes** o **Reemplazar todo**
+```
+1. Admin inicia sesion (admin / admin1234)
+2. Admin crea ciclos y grupos (panel "Ciclos y Grupos")
+3. Admin crea cuentas de docentes (panel "Usuarios" > Nuevo)
+4. Admin importa alumnos masivamente (boton "Importar masivo")
+   - Pega lista de nombres, elige rol=Alumno y grupo
+   - Previsualiza y ajusta si hace falta
+   - Crea todos de una vez
+5. Docente crea cuadernos (panel principal)
+6. Docente inscribe alumnos en cada cuaderno (boton 👥)
+   - Filtra por ciclo o grupo para encontrarlos rapido
+7. Docente configura RAs, UDs y actividades dentro del cuaderno
+8. Docente introduce notas (clic en celda)
+9. Alumno se autentica y ve sus calificaciones por modulo
+```
 
 ---
 
-### Formatos de importación
+## Tecnologias
 
-#### Alumnos
-Texto plano (un nombre por línea):
-```
-García López, Ana
-Martínez Ruiz, Carlos
-Sánchez Pérez, Elena
-```
-
-O en JSON:
-```json
-[
-  { "nombre": "García López, Ana" },
-  { "nombre": "Martínez Ruiz, Carlos" }
-]
-```
-
-#### Resultados de Aprendizaje
-```json
-[
-  {
-    "id": "RA1",
-    "titulo": "Identifica los elementos del sistema",
-    "descripcion": "Descripción del RA",
-    "peso": null,
-    "pctAct": 40,
-    "pctExam": 60
-  }
-]
-```
-> `peso: null` → distribución automática proporcional entre todos los RAs.
-
-#### Unidades Didácticas
-```json
-[
-  {
-    "id": "UD1",
-    "titulo": "Unidad 1",
-    "descripcion": "Hardware y componentes",
-    "ras": ["RA1"]
-  }
-]
-```
-
-#### Actividades
-```json
-[
-  {
-    "nombre": "Práctica Hardware",
-    "tipo": "actividad",
-    "ras": ["RA1"],
-    "ud": "UD1",
-    "peso": 50
-  },
-  {
-    "nombre": "Examen UD1",
-    "tipo": "examen",
-    "ras": ["RA1"],
-    "ud": "UD1",
-    "peso": 50
-  }
-]
-```
-> Los campos `notas` son opcionales; si no se incluyen, se inicializan vacíos.
+| Capa | Tecnologia |
+|------|-----------|
+| Frontend | React 18 + Vite |
+| Graficos | Recharts |
+| Backend | Node.js + Express |
+| Base de datos | SQLite (better-sqlite3) |
+| Autenticacion | JWT (jsonwebtoken + bcryptjs) |
+| Servidor web | Nginx (proxy inverso) |
+| Contenedores | Docker + Docker Compose |
 
 ---
 
-## Actividades incompletas ⚠
+## Formulas de calculo
 
-Una actividad se resalta en **rojo** cuando le falta algún campo obligatorio:
+```
+Nota RA  = (media actividades x pctAct/100) + (media examenes x pctExam/100)
+Nota final = sum(Nota_RA_i x peso_RA_i)  para todos los RAs
+```
 
-| Campo | Descripción |
-|---|---|
-| **sin RA** | No tiene ningún Resultado de Aprendizaje asociado |
-| **sin UD** | No tiene Unidad Didáctica asignada |
-| **sin peso** | El campo peso está vacío o sin definir |
-
-Las actividades incompletas afectan al cálculo de notas. Se muestra un aviso global en la pestaña **Actividades** con el número de entradas a corregir.
+Los pesos de los RAs se distribuyen automaticamente si se dejan en blanco.
 
 ---
 
-## Cálculo de notas
+## Importar / Exportar datos
 
-```
-Nota RA = (media_actividades × pctAct%) + (media_exámenes × pctExam%)
-Nota final = Σ (nota_RA × peso_RA)
-```
-
-Los pesos de los RAs se normalizan automáticamente si no se especifican manualmente.
-
----
-
-## Tecnologías
-
-- **React 18** + **Vite** — interfaz reactiva
-- **Recharts** — gráficos (barras, radar)
-- **localStorage** — persistencia automática en el navegador
-- **Nginx** — servidor de producción en Docker
-- **Docker multi-stage** — imagen ligera basada en `nginx:alpine`
+Dentro de cada cuaderno es posible importar y exportar:
+- **Alumnos**: texto plano (un nombre por linea) o JSON
+- **RAs, UDs, Actividades**: formato JSON
+- **Calificaciones**: exportacion CSV desde la pestana Calificaciones
