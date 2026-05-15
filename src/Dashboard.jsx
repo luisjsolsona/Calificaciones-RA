@@ -691,6 +691,12 @@ function UserManager({ onRefresh }) {
                     </span>
                   </td>
                   <td style={{ padding:'9px 12px', fontSize:12 }}>
+                    {u.ciclo_codigo
+                      ? <span style={{ background:'#f5f3ff', color:'#7c3aed', border:'1px solid #ddd6fe',
+                          borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700 }}>{u.ciclo_codigo}</span>
+                      : <span style={{ color:'#cbd5e1' }}>—</span>}
+                  </td>
+                  <td style={{ padding:'9px 12px', fontSize:12 }}>
                     {u.grupo_nombre
                       ? <span style={{ background:'#eef2ff', color:'#4f46e5', border:'1px solid #c7d2fe',
                           borderRadius:6, padding:'2px 8px', fontSize:11 }}>{u.grupo_nombre}</span>

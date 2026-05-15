@@ -615,6 +615,7 @@ function TabCalificaciones({ actividades, alumnos, ras, editingNota, setEditingN
 
 // ─── COMPONENTE PRINCIPAL ────────────────────────────────────────────────────
 export default function CuadernoCalificaciones({
+  readOnly: readOnlyProp,
   initialData,   // { alumnos, ras, uds, actividades }
   onSave,        // callback(data) — cuando se usan props externas
   currentUser,   // { id, nombre, role, alumnoNombre? }
@@ -623,7 +624,7 @@ export default function CuadernoCalificaciones({
   allUsers,      // todos los usuarios (para admin)
 } = {}) {
   const role     = currentUser?.role || "admin";
-  const readOnly = role === "alumno";
+  const readOnly = readOnlyProp ?? (role === "alumno");
 
   const [tab, setTab]                 = useState("resumen");
   const [alumnos, setAlumnos]         = useState(initialData?.alumnos     || []);
