@@ -14,15 +14,15 @@ router.get('/', auth(['admin', 'docente']), (req, res) => {
 
 // POST /api/usuarios
 router.post('/', auth(['admin']), (req, res) => {
-  const { email, usuario, nombre, password, rol, alumno_nombre } = req.body;
+  const { email, usuario, nombre, password, rol, alumno_nombre, grupo_id } = req.body;
   if (!['admin', 'docente', 'alumno'].includes(rol))
     return res.status(400).json({ error: 'Rol inválido' });
   try {
     const hash = bcrypt.hashSync(password || 'cambiar1234', 10);
     const r = db.prepare(
-      'INSERT INTO usuarios(email,usuario,password_hash,nombre,rol,alumno_nombre) VALUES(?,?,?,?,?,?)'
-    ).run(email, usuario || null, hash, nombre, rol, alumno_nombre || null);
-    res.json({ id: r.lastInsertRowid, email, usuario, nombre, rol, alumno_nombre });
+      'INSERT INTO usuarios(email,usuario,password_hash,nombre,rol,alumno_nombre,grupo_id) VALUES(?,?,?,?,?,?,?)'
+    ).run(email, usuario || null, hash, nombre, rol, alumno_nombre || null, grupo_id || null);
+    res.json({ id: r.lastInsertRowid, email, usuario, nombre, rol, alumno_nombre, grupo_id });
   } catch (e) { res.status(409).json({ error: 'Email o usuario ya existe' }); }
 });
 
