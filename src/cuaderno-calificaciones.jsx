@@ -563,7 +563,7 @@ function TabCalificaciones({ actividades, alumnos, ras, editingNota, setEditingN
           <option value="examen">📄 Exámenes</option>
         </select>
         <span style={{ color:"#64748b", fontSize:12, marginLeft:"auto" }}>
-          {lista.length} / {actividades.length} actividades
+          {alumnos.length} alumnos · {ras.length} RAs
         </span>
         <button onClick={exportCSV} style={OB}>↓ CSV</button>
         {(buscar||filtroRA||filtroTipo) && (
@@ -577,56 +577,34 @@ function TabCalificaciones({ actividades, alumnos, ras, editingNota, setEditingN
         <table style={{ width:"100%", borderCollapse:"collapse", minWidth:500 }}>
           <thead style={{ position:"sticky", top:0, zIndex:10 }}>
             <tr style={{ background:"#f1f5f9" }}>
-              <SortHeader col="nombre" label="Actividad" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} left/>
-              <SortHeader col="tipo"   label="Tipo"      sortBy={sortBy} sortDir={sortDir} onSort={toggleSort}/>
-              <SortHeader col="ra"     label="RA"        sortBy={sortBy} sortDir={sortDir} onSort={toggleSort}/>
-              <SortHeader col="ud"     label="UD"        sortBy={sortBy} sortDir={sortDir} onSort={toggleSort}/>
-              {alumnos.map(al=>(
-                <th key={al.id} style={{ ...TH, minWidth:90 }}>{al.nombre.split(",")[0]}</th>
+              <th style={{ ...TH, textAlign:"left", minWidth:200 }}>Alumno</th>
+              {ras.map(ra=>(
+                <th key={ra.id} style={{ ...TH, minWidth:110 }}>
+                  <div style={{ color:"#4f46e5", fontWeight:700, fontSize:13 }}>{ra.id}</div>
+                  <div style={{ fontSize:10, color:"#64748b", fontWeight:400, marginTop:2 }}>{ra.titulo}</div>
+                </th>
               ))}
+              <th style={{ ...TH, minWidth:100 }}>Nota Final</th>
             </tr>
           </thead>
           <tbody>
-            {lista.length === 0 ? (
-              <tr><td colSpan={4+alumnos.length} style={{ ...TD, textAlign:"center", color:"#94a3b8", padding:40 }}>
-                Sin resultados para los filtros aplicados
+            {alumnos.length === 0 ? (
+              <tr><td colSpan={2+ras.length} style={{ ...TD, textAlign:"center", color:"#94a3b8", padding:40 }}>
+                Sin alumnos
               </td></tr>
-            ) : lista.map((act,i) => {
-              const inc = actividadIncompleta(act);
-              return (
-                <tr key={act.id} style={{ background:i%2===0?"#fff":"#f8fafc", borderLeft:inc?"3px solid #fca5a5":"3px solid transparent" }}>
-                  <td style={TD}>
-                    {inc && <span title={actividadProblemas(act).join(", ")} style={{ color:"#dc2626", marginRight:5 }}>⚠</span>}
-                    {act.nombre}
+            ) : alumnos.map((al,i) => (
+              <tr key={al.id} style={{ background:i%2===0?"#fff":"#f8fafc" }}>
+                <td style={TD}>{al.nombre}</td>
+                {ras.map(ra=>(
+                  <td key={ra.id} style={{ ...TD, textAlign:"center" }}>
+                    {notaBadge(calcNotaRA(ra,al.id,actividades))}
                   </td>
-                  <td style={{ ...TD, textAlign:"center" }}>{tipoBadge(act.tipo)}</td>
-                  <td style={{ ...TD, textAlign:"center" }}>
-                    {act.ras.map(r=>(
-                      <span key={r} style={{ fontSize:10, background:"#eef2ff", color:"#4f46e5", border:"1px solid #c7d2fe", borderRadius:4, padding:"1px 5px", marginRight:3 }}>{r}</span>
-                    ))}
-                  </td>
-                  <td style={{ ...TD, textAlign:"center", fontSize:12, color:"#64748b" }}>{act.ud||"—"}</td>
-                  {alumnos.map(al => {
-                    const k    = `${act.id}-${al.id}`;
-                    const nota = getNota(act.notas, al.id);
-                    const obs  = getObs(act.notas, al.id);
-                    return (
-                      <td key={al.id} style={{ ...TD, textAlign:"center", cursor:readOnly?"default":"pointer", verticalAlign:"middle" }}
-                        onClick={()=>!readOnly && editingNota!==k && setEditingNota(k)}>
-                        {editingNota===k && !readOnly
-                          ? <NotaEditor nota={nota} obs={obs}
-                              onSave={(n,o)=>saveNota(act.id,al.id,n,o)}
-                              onCancel={()=>setEditingNota(null)}/>
-                          : <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:3 }}>
-                              {notaBadge(nota)}
-                              {obs && <span title={obs} style={{ fontSize:13, cursor:"help" }}>💬</span>}
-                            </div>}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
+                ))}
+                <td style={{ ...TD, textAlign:"center" }}>
+                  {notaBadge(calcNotaFinal(al.id,ras,actividades),"lg")}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -1299,12 +1277,12 @@ export default function CuadernoCalificaciones({
 
           return (
             <div key={ra.id} style={{ background:"#fff", border:`1px solid ${(!okAct||!okExam)?"#fca5a5":"#e2e8f0"}`, borderRadius:12, overflow:"hidden", boxShadow:SH }}>
-              <div style={{ background:"#eef2ff", padding:"10px 16px", display:"flex", alignItems:"center", gap:10 }}>
-                <span style={{ background:"#4f46e5", color:"#fff", borderRadius:6, padding:"2px 10px", fontWeight:700, fontSize:13 }}>{ra.id}</span>
-                <span style={{ color:"#334155", fontSize:13, flex:1 }}>{ra.titulo}</span>
-                <span style={{ fontSize:11, color:"#0891b2", background:"#ecfeff", border:"1px solid #a5f3fc", borderRadius:6, padding:"2px 8px" }}>Act {ra.pctAct??40}%</span>
-                <span style={{ fontSize:11, color:"#64748b" }}>+</span>
-                <span style={{ fontSize:11, color:"#7c3aed", background:"#f5f3ff", border:"1px solid #ddd6fe", borderRadius:6, padding:"2px 8px" }}>Exam {ra.pctExam??60}%</span>
+              <div style={{ background:"#3730a3", padding:"14px 16px", display:"flex", alignItems:"center", gap:12 }}>
+                <span style={{ background:"#fff", color:"#3730a3", borderRadius:8, padding:"4px 14px", fontWeight:800, fontSize:15 }}>{ra.id}</span>
+                <span style={{ color:"#fff", fontSize:16, fontWeight:700, flex:1 }}>{ra.titulo}</span>
+                <span style={{ fontSize:14, color:"#fff", background:"#0891b2", borderRadius:8, padding:"4px 12px", fontWeight:700 }}>Act {ra.pctAct??40}%</span>
+                <span style={{ fontSize:14, color:"#c7d2fe" }}>+</span>
+                <span style={{ fontSize:14, color:"#fff", background:"#7c3aed", borderRadius:8, padding:"4px 12px", fontWeight:700 }}>Exam {ra.pctExam??60}%</span>
                 {(!okAct||!okExam) && <span style={{ fontSize:11, color:"#dc2626", fontWeight:700 }}>⚠ pesos incorrectos</span>}
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr" }}>
@@ -1453,7 +1431,7 @@ export default function CuadernoCalificaciones({
                                 onCancel={()=>setEditingNota(null)}/>
                             : <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:4 }}>
                                 {notaBadge(nota===""?null:nota)}
-                                {!readOnly && <span style={{ fontSize:10, color:"#94a3b8" }}>✏</span>}
+                                {!readOnly && <span style={{ fontSize:18, color:"#4f46e5", background:"#eef2ff", border:"1px solid #c7d2fe", borderRadius:6, padding:"4px 10px", cursor:"pointer" }}>✏</span>}
                               </div>}
                         </td>
                         <td style={{ ...TD, color:"#64748b", fontSize:12, maxWidth:260 }}>
