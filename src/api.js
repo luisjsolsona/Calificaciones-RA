@@ -40,4 +40,7 @@ export const api = {
   deleteCiclo:      (id)               => req('DELETE', `/ciclos/${id}`),
   createGrupo:      (cicloId, data)    => req('POST',   `/ciclos/${cicloId}/grupos`, data),
   deleteGrupo:      (id)               => req('DELETE', `/ciclos/grupo/${id}`),
+  getDocentesCuaderno:   (cid)          => req('GET',    `/cuadernos/${cid}/docentes`),
+  addDocenteCuaderno:    (cid, did)      => req('POST',   `/cuadernos/${cid}/docentes`, { docente_id: did }),
+  removeDocenteCuaderno: (cid, did)      => req('DELETE', `/cuadernos/${cid}/docentes/${did}`),
 };

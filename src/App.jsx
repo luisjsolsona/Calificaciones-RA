@@ -77,6 +77,7 @@ export default function App() {
       initialData={currentCuaderno.datos || {}}
       cuaderno={currentCuaderno}
       currentUser={{ ...currentUser, role: currentUser.rol }}
+      readOnly={currentUser.rol === 'alumno' || currentCuaderno.puedo_editar === false}
       onSave={handleSaveCuaderno}
       onBack={() => setView("dashboard")}
     />

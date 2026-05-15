@@ -7,8 +7,8 @@ const auth   = require('../middleware/auth');
 router.get('/', auth(['admin', 'docente']), (req, res) => {
   const { rol } = req.query;
   const rows = rol
-    ? db.prepare('SELECT u.id,u.email,u.usuario,u.nombre,u.rol,u.alumno_nombre,u.grupo_id,g.nombre as grupo_nombre,u.created_at FROM usuarios u LEFT JOIN grupos g ON u.grupo_id=g.id WHERE u.rol=? ORDER BY u.nombre').all(rol)
-    : db.prepare('SELECT u.id,u.email,u.usuario,u.nombre,u.rol,u.alumno_nombre,u.grupo_id,g.nombre as grupo_nombre,u.created_at FROM usuarios u LEFT JOIN grupos g ON u.grupo_id=g.id ORDER BY u.nombre').all();
+    ? db.prepare('SELECT u.id,u.email,u.usuario,u.nombre,u.rol,u.alumno_nombre,u.grupo_id,g.nombre as grupo_nombre,u.ciclo_id,c.codigo as ciclo_codigo,u.created_at FROM usuarios u LEFT JOIN grupos g ON u.grupo_id=g.id LEFT JOIN ciclos c ON u.ciclo_id=c.id WHERE u.rol=? ORDER BY u.nombre').all(rol)
+    : db.prepare('SELECT u.id,u.email,u.usuario,u.nombre,u.rol,u.alumno_nombre,u.grupo_id,g.nombre as grupo_nombre,u.ciclo_id,c.codigo as ciclo_codigo,u.created_at FROM usuarios u LEFT JOIN grupos g ON u.grupo_id=g.id LEFT JOIN ciclos c ON u.ciclo_id=c.id ORDER BY u.nombre').all();
   res.json(rows);
 });
 
@@ -33,9 +33,9 @@ router.post('/', auth(['admin']), (req, res) => {
 
 // PUT /api/usuarios/:id
 router.put('/:id', auth(['admin']), (req, res) => {
-  const { nombre, email, usuario, rol, alumno_nombre, grupo_id } = req.body;
-  db.prepare('UPDATE usuarios SET nombre=?,email=?,usuario=?,rol=?,alumno_nombre=?,grupo_id=? WHERE id=?')
-    .run(nombre, email, usuario || null, rol, alumno_nombre || null, grupo_id || null, req.params.id);
+  const { nombre, email, usuario, rol, alumno_nombre, grupo_id, ciclo_id } = req.body;
+  db.prepare('UPDATE usuarios SET nombre=?,email=?,usuario=?,rol=?,alumno_nombre=?,grupo_id=?,ciclo_id=? WHERE id=?')
+    .run(nombre, email, usuario || null, rol, alumno_nombre || null, grupo_id || null, ciclo_id || null, req.params.id);
   res.json({ ok: true });
 });
 

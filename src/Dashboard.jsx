@@ -196,8 +196,138 @@ function InscripcionesModal({ cuaderno, onClose }) {
 }
 
 
+
+// ── Modal gestión de docentes del cuaderno ───────────────────────────────
+function DocentesModal({ cuaderno, currentUser, onClose }) {
+  const [asignados,  setAsignados]  = useState([]);
+  const [docentes,   setDocentes]   = useState([]);
+  const [buscar,     setBuscar]     = useState('');
+  const [loading,    setLoading]    = useState(true);
+  const esTitular = cuaderno.docente_id === currentUser.id || currentUser.rol === 'admin';
+
+  useEffect(() => {
+    Promise.all([
+      api.getDocentesCuaderno(cuaderno.id),
+      api.getUsuarios('docente'),
+    ]).then(([asig, docs]) => {
+      setAsignados(asig);
+      setDocentes(docs.filter(d => d.id !== cuaderno.docente_id));
+    }).finally(() => setLoading(false));
+  }, [cuaderno.id]);
+
+  const asignadosIds  = new Set(asignados.map(d => d.id));
+  const disponibles   = docentes.filter(d =>
+    !asignadosIds.has(d.id) &&
+    (!buscar || d.nombre.toLowerCase().includes(buscar.toLowerCase()))
+  );
+
+  async function asignar(d) {
+    await api.addDocenteCuaderno(cuaderno.id, d.id);
+    setAsignados(prev => [...prev, d]);
+  }
+  async function desasignar(d) {
+    await api.removeDocenteCuaderno(cuaderno.id, d.id);
+    setAsignados(prev => prev.filter(x => x.id !== d.id));
+  }
+
+  const IS = { background:'#fff', border:'1px solid #e2e8f0', borderRadius:8,
+    padding:'8px 12px', fontSize:13, outline:'none', width:'100%', boxSizing:'border-box' };
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.4)',
+      display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:16 }}>
+      <div style={{ background:'#fff', borderRadius:16, width:'100%', maxWidth:520,
+        maxHeight:'80vh', display:'flex', flexDirection:'column',
+        boxShadow:'0 20px 60px rgba(0,0,0,0.2)' }}>
+        <div style={{ padding:'18px 24px', borderBottom:'1px solid #e2e8f0',
+          display:'flex', alignItems:'center', gap:12 }}>
+          <div style={{ flex:1 }}>
+            <h2 style={{ margin:0, fontSize:16, fontWeight:700 }}>Docentes — {cuaderno.titulo}</h2>
+            <p style={{ margin:0, fontSize:12, color:'#64748b' }}>Titular + profesores de apoyo</p>
+          </div>
+          <button onClick={onClose} style={{ background:'none', border:'1px solid #e2e8f0',
+            borderRadius:8, padding:'6px 12px', cursor:'pointer', color:'#64748b' }}>X</button>
+        </div>
+        <div style={{ padding:'16px 24px', flex:1, overflowY:'auto', display:'flex', flexDirection:'column', gap:14 }}>
+          {loading ? <p style={{ color:'#94a3b8' }}>Cargando...</p> : <>
+            {/* Titular */}
+            <div>
+              <h3 style={{ margin:'0 0 8px', fontSize:12, fontWeight:700, color:'#475569',
+                textTransform:'uppercase', letterSpacing:.5 }}>Titular</h3>
+              <div style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0' }}>
+                <span style={{ fontSize:18 }}>📚</span>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, fontWeight:600 }}>{cuaderno.docente_nombre}</div>
+                </div>
+                <span style={{ background:'#eef2ff', color:'#4f46e5', border:'1px solid #c7d2fe',
+                  borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:600 }}>Titular</span>
+              </div>
+            </div>
+
+            {/* Profesores de apoyo */}
+            <div>
+              <h3 style={{ margin:'0 0 8px', fontSize:12, fontWeight:700, color:'#475569',
+                textTransform:'uppercase', letterSpacing:.5 }}>
+                Profesores de apoyo ({asignados.length})
+              </h3>
+              {asignados.length === 0
+                ? <p style={{ color:'#94a3b8', fontSize:13 }}>Sin profesores de apoyo</p>
+                : asignados.map(d => (
+                  <div key={d.id} style={{ display:'flex', alignItems:'center', gap:10,
+                    padding:'8px 0', borderBottom:'1px solid #f1f5f9' }}>
+                    <span style={{ fontSize:18 }}>📚</span>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:13, fontWeight:500 }}>{d.nombre}</div>
+                      <div style={{ fontSize:11, color:'#94a3b8' }}>{d.email}</div>
+                    </div>
+                    {esTitular && (
+                      <button onClick={() => desasignar(d)} style={{
+                        background:'none', border:'1px solid #fca5a5', borderRadius:6,
+                        color:'#dc2626', fontSize:12, padding:'4px 10px', cursor:'pointer' }}>
+                        Quitar
+                      </button>
+                    )}
+                  </div>
+                ))
+              }
+            </div>
+
+            {/* Añadir apoyo */}
+            {esTitular && (
+              <div>
+                <h3 style={{ margin:'0 0 8px', fontSize:12, fontWeight:700, color:'#475569',
+                  textTransform:'uppercase', letterSpacing:.5 }}>Añadir profesor de apoyo</h3>
+                <input value={buscar} onChange={e => setBuscar(e.target.value)}
+                  placeholder="Buscar docente..." style={{ ...IS, marginBottom:10 }}/>
+                {disponibles.length === 0
+                  ? <p style={{ color:'#94a3b8', fontSize:13 }}>Sin docentes disponibles</p>
+                  : disponibles.map(d => (
+                    <div key={d.id} style={{ display:'flex', alignItems:'center', gap:10,
+                      padding:'8px 0', borderBottom:'1px solid #f1f5f9' }}>
+                      <span style={{ fontSize:18 }}>📚</span>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:13 }}>{d.nombre}</div>
+                        <div style={{ fontSize:11, color:'#94a3b8' }}>{d.email}{d.ciclo_codigo ? ' · ' + d.ciclo_codigo : ''}</div>
+                      </div>
+                      <button onClick={() => asignar(d)} style={{
+                        background:'#4f46e5', border:'none', borderRadius:6,
+                        color:'#fff', fontSize:12, padding:'4px 12px', cursor:'pointer' }}>
+                        + Apoyo
+                      </button>
+                    </div>
+                  ))
+                }
+              </div>
+            )}
+          </>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Tarjeta de cuaderno ────────────────────────────────────────────────────
-function CuadernoCard({ cuaderno, onClick, onDelete, onInscripciones, canManage }) {
+function CuadernoCard({ cuaderno, onClick, onDelete, onInscripciones, onDocentes, canManage, puedeEditar }) {
   const nAlumnos = cuaderno.data?.alumnos?.length ?? 0;
   const nActs    = cuaderno.data?.actividades?.length ?? 0;
   return (
@@ -224,12 +354,15 @@ function CuadernoCard({ cuaderno, onClick, onDelete, onInscripciones, canManage 
         </div>
       </div>
       <div style={{ padding:"0 16px 14px", display:"flex", gap:8, flexWrap:"wrap" }}>
-        <button onClick={onClick} style={{ flex:1, background:"#4f46e5", color:"#fff",
+        <button onClick={onClick} style={{ flex:1, background: puedeEditar===false?"#64748b":"#4f46e5", color:"#fff",
           border:"none", borderRadius:8, padding:"9px 0", fontSize:13, fontWeight:600, cursor:"pointer" }}>
-          Abrir →
+          {puedeEditar===false ? "Ver (solo lectura)" : "Abrir →"}
         </button>
         {canManage && (
           <>
+            <button onClick={onDocentes} title="Profesores de apoyo" style={{
+              background:"none", border:"1px solid #e2e8f0", borderRadius:8, color:"#64748b",
+              padding:"9px 11px", fontSize:13, cursor:"pointer" }}>📚</button>
             <button onClick={onInscripciones} title="Gestionar inscripciones" style={{
               background:"none", border:"1px solid #c7d2fe", borderRadius:8, color:"#4f46e5",
               padding:"9px 11px", fontSize:13, cursor:"pointer" }}>👥</button>
@@ -326,7 +459,7 @@ function UserManager({ onRefresh }) {
   const [filtroRol,   setFiltroRol]   = useState('');
   const [filtroGrupo, setFiltroGrupo] = useState('');
   const [form, setForm] = useState({
-    nombre:'', email:'', usuario:'', password:'', rol:'docente', alumno_nombre:'', grupo_id:''
+    nombre:'', email:'', usuario:'', password:'', rol:'docente', alumno_nombre:'', grupo_id:'', ciclo_id:''
   });
 
   useEffect(() => {
@@ -375,7 +508,8 @@ function UserManager({ onRefresh }) {
     setForm({
       nombre: u.nombre, email: u.email, usuario: u.usuario||'',
       password: '', rol: u.rol, alumno_nombre: u.alumno_nombre||'',
-      grupo_id: u.grupo_id ? String(u.grupo_id) : ''
+      grupo_id: u.grupo_id ? String(u.grupo_id) : '',
+      ciclo_id: u.ciclo_id ? String(u.ciclo_id) : ''
     });
     setEditUser(u); setShowForm(true);
   }
@@ -387,8 +521,8 @@ function UserManager({ onRefresh }) {
       const payload = {
         ...form,
         alumno_nombre: form.rol === 'alumno' ? (form.alumno_nombre || form.nombre) : null,
-        grupo_id: form.grupo_id && !String(form.grupo_id).startsWith('c')
-          ? Number(form.grupo_id) : null,
+        grupo_id: form.grupo_id && !String(form.grupo_id).startsWith('c') ? Number(form.grupo_id) : null,
+        ciclo_id: form.ciclo_id ? Number(form.ciclo_id) : null,
       };
       if (editUser) {
         await api.updateUsuario(editUser.id, payload);
@@ -490,11 +624,20 @@ function UserManager({ onRefresh }) {
             </select>
             <select value={form.grupo_id} onChange={e=>setForm(p=>({...p,grupo_id:e.target.value}))}
               style={{ ...IS, cursor:'pointer' }}>
-              <option value=''>Sin grupo</option>
+              <option value=''>Sin grupo (alumnos)</option>
               {allGrupos.map(g => (
                 <option key={g.id} value={String(g.id)}>{g.label}</option>
               ))}
             </select>
+            {(form.rol === 'docente' || form.rol === 'admin') && (
+              <select value={form.ciclo_id} onChange={e=>setForm(p=>({...p,ciclo_id:e.target.value}))}
+                style={{ ...IS, cursor:'pointer' }}>
+                <option value=''>Ciclo del docente</option>
+                {ciclos.map(c => (
+                  <option key={c.id} value={String(c.id)}>{c.codigo} — {c.nombre}</option>
+                ))}
+              </select>
+            )}
             {form.rol === 'alumno' && (
               <input style={{ ...IS, gridColumn:'1/-1' }} value={form.alumno_nombre}
                 onChange={e=>setForm(p=>({...p,alumno_nombre:e.target.value}))}
@@ -519,7 +662,7 @@ function UserManager({ onRefresh }) {
         <table style={{ width:'100%', borderCollapse:'collapse', minWidth:600 }}>
           <thead>
             <tr style={{ background:'#f1f5f9' }}>
-              {['Nombre','Email / Usuario','Rol','Grupo','Nombre en cuaderno',''].map(h => (
+              {['Nombre','Email / Usuario','Rol','Ciclo','Grupo','Nombre en cuaderno',''].map(h => (
                 <th key={h} style={{ padding:'8px 12px', fontSize:11, fontWeight:600,
                   textTransform:'uppercase', letterSpacing:.6, color:'#475569',
                   textAlign:'left', borderBottom:'1px solid #e2e8f0', whiteSpace:'nowrap' }}>{h}</th>
@@ -941,7 +1084,8 @@ export default function Dashboard({ cuadernos, setCuadernos, currentUser, onOpen
   const [showUsuarios, setShowUsuarios] = useState(false);
   const [showImport,   setShowImport]   = useState(false);
   const [showCiclos,   setShowCiclos]   = useState(false);
-  const [inscModal,    setInscModal]    = useState(null); // cuaderno seleccionado
+  const [inscModal,    setInscModal]    = useState(null);
+  const [docentesModal, setDocentesModal] = useState(null);
   const [docentes,     setDocentes]     = useState([]);
 
   const rol = currentUser.rol;
@@ -1091,6 +1235,8 @@ export default function Dashboard({ cuadernos, setCuadernos, currentUser, onOpen
                       onClick={()=>onOpenCuaderno(c.id)}
                       onDelete={()=>deleteCuaderno(c.id)}
                       onInscripciones={()=>setInscModal(c)}
+                      onDocentes={()=>setDocentesModal(c)}
+                      puedeEditar={c.puedo_editar}
                       canManage={true}/>
                   ))}
                 </div>
@@ -1124,6 +1270,9 @@ export default function Dashboard({ cuadernos, setCuadernos, currentUser, onOpen
 
       {inscModal && (
         <InscripcionesModal cuaderno={inscModal} onClose={()=>setInscModal(null)}/>
+      )}
+      {docentesModal && (
+        <DocentesModal cuaderno={docentesModal} currentUser={currentUser} onClose={()=>setDocentesModal(null)}/>
       )}
       {showImport && (
         <ImportacionMasiva

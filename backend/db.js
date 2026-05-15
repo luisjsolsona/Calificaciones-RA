@@ -58,8 +58,19 @@ db.exec(`
   );
 `);
 
-// Añadir grupo_id a usuarios si no existe
+// Añadir grupo_id y ciclo_id a usuarios si no existen
 try { db.exec('ALTER TABLE usuarios ADD COLUMN grupo_id INTEGER REFERENCES grupos(id)'); } catch(_) {}
+try { db.exec('ALTER TABLE usuarios ADD COLUMN ciclo_id INTEGER REFERENCES ciclos(id)'); } catch(_) {}
+
+// Docentes adicionales por cuaderno
+db.exec(`
+  CREATE TABLE IF NOT EXISTS cuaderno_docentes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    cuaderno_id TEXT    NOT NULL REFERENCES cuadernos(id) ON DELETE CASCADE,
+    docente_id  INTEGER NOT NULL REFERENCES usuarios(id)  ON DELETE CASCADE,
+    UNIQUE(cuaderno_id, docente_id)
+  );
+`);
 
 module.exports = db;
 
