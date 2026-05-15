@@ -127,55 +127,116 @@ function ImportPanel({ placeholder, onImport, onClose }) {
   );
 }
 
-// ─── PANEL EDITAR ACTIVIDAD (fuera del árbol para evitar remounts) ────────────
+// ─── MODAL ────────────────────────────────────────────────────────────────────
+function Modal({ onClose, children }) {
+  useEffect(() => {
+    const h = e => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, [onClose]);
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,0.55)", zIndex:1000,
+      display:"flex", alignItems:"center", justifyContent:"center", padding:20,
+      backdropFilter:"blur(3px)" }}
+      onClick={onClose}>
+      <div style={{ width:"100%", maxWidth:560, maxHeight:"92vh", overflowY:"auto", borderRadius:16 }}
+        onClick={e=>e.stopPropagation()}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ─── MODAL EDITAR ACTIVIDAD (fuera del árbol para evitar remounts) ────────────
 function EditActPanel({ act, ras, uds, onUpdate, onClose, onRemove }) {
   if (!act) return null;
   const prob = actividadProblemas(act);
   const red  = c => ({ ...IS, border:`1px solid ${c?"#fca5a5":IS.border}` });
   return (
-    <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:12, padding:16, marginTop:12, boxShadow:"0 4px 12px rgba(0,0,0,0.08)" }}>
-      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12, flexWrap:"wrap" }}>
-        <span style={{ fontWeight:700, color:"#92400e", fontSize:14 }}>✏ Editando actividad</span>
-        {prob.length>0 && (
-          <span style={{ color:"#dc2626", fontSize:12, background:"#fee2e2", border:"1px solid #fca5a5", borderRadius:6, padding:"2px 10px" }}>
-            ⚠ {prob.join(" · ")}
-          </span>
-        )}
-        <div style={{ flex:1 }}/>
-        <button onClick={onClose} style={OB}>✕ Cerrar</button>
-      </div>
-      <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr", gap:8, marginBottom:12 }}>
-        <input value={act.nombre} onChange={e=>onUpdate({nombre:e.target.value})}
-          placeholder="Nombre *" autoFocus style={red(!act.nombre)}/>
-        <select value={act.tipo} onChange={e=>onUpdate({tipo:e.target.value})} style={IS}>
-          <option value="actividad">📋 Actividad</option>
-          <option value="examen">📄 Examen</option>
-        </select>
-        <select value={act.ud} onChange={e=>onUpdate({ud:e.target.value})} style={red(!act.ud)}>
-          <option value="">-- UD * --</option>
-          {uds.map(u=><option key={u.id} value={u.id}>{u.id} — {u.titulo}</option>)}
-        </select>
-        <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-          <input type="number" min={0} max={100}
-            value={act.peso??""} onChange={e=>onUpdate({peso:e.target.value===""?null:Number(e.target.value)})}
-            placeholder="Peso *" style={red(act.peso===null||act.peso===undefined||act.peso==="")}/>
-          <span style={{ color:"#64748b", fontSize:11 }}>%</span>
+    <div style={{ background:"#fff", borderRadius:16, overflow:"hidden", boxShadow:"0 24px 64px rgba(0,0,0,0.25)" }}>
+      {/* Cabecera */}
+      <div style={{ background:"#4f46e5", padding:"18px 22px", display:"flex", alignItems:"flex-start", gap:12 }}>
+        <div style={{ flex:1 }}>
+          <h3 style={{ margin:"0 0 4px", color:"#fff", fontSize:16, fontWeight:800 }}>
+            ✏ {act.nombre || "Editar actividad"}
+          </h3>
+          {prob.length > 0
+            ? <span style={{ color:"#fde68a", fontSize:12 }}>⚠ {prob.join(" · ")}</span>
+            : <span style={{ color:"rgba(255,255,255,0.6)", fontSize:12 }}>Los cambios se aplican al instante</span>}
         </div>
+        <button onClick={onClose} style={{ background:"rgba(255,255,255,0.15)", border:"none",
+          borderRadius:8, color:"#fff", width:34, height:34, cursor:"pointer", fontSize:18,
+          display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>✕</button>
       </div>
-      <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
-        <span style={{ color:"#64748b", fontSize:12, fontWeight:600 }}>RAs *:</span>
-        {ras.map(ra=>(
-          <label key={ra.id} style={{ cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
-            <input type="checkbox" checked={act.ras.includes(ra.id)}
-              onChange={e=>onUpdate({ras:e.target.checked?[...act.ras,ra.id]:act.ras.filter(r=>r!==ra.id)})}
-              style={{ accentColor:"#4f46e5" }}/>
-            <span style={{ color:"#334155", fontSize:12 }}>{ra.id}</span>
+
+      {/* Cuerpo */}
+      <div style={{ padding:"22px 22px 18px", display:"flex", flexDirection:"column", gap:16 }}>
+
+        {/* Nombre */}
+        <div>
+          <label style={{ fontSize:12, fontWeight:600, color:"#475569", display:"block", marginBottom:6 }}>Nombre *</label>
+          <input value={act.nombre} onChange={e=>onUpdate({nombre:e.target.value})}
+            placeholder="Nombre de la actividad" autoFocus style={red(!act.nombre)}/>
+        </div>
+
+        {/* Tipo · UD · Peso */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 90px", gap:12 }}>
+          <div>
+            <label style={{ fontSize:12, fontWeight:600, color:"#475569", display:"block", marginBottom:6 }}>Tipo</label>
+            <select value={act.tipo} onChange={e=>onUpdate({tipo:e.target.value})} style={IS}>
+              <option value="actividad">📋 Actividad</option>
+              <option value="examen">📄 Examen</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize:12, fontWeight:600, color:"#475569", display:"block", marginBottom:6 }}>Unidad Didáctica *</label>
+            <select value={act.ud} onChange={e=>onUpdate({ud:e.target.value})} style={red(!act.ud)}>
+              <option value="">-- UD --</option>
+              {uds.map(u=><option key={u.id} value={u.id}>{u.id} — {u.titulo}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize:12, fontWeight:600, color:"#475569", display:"block", marginBottom:6 }}>Peso %</label>
+            <input type="number" min={0} max={100}
+              value={act.peso??""} onChange={e=>onUpdate({peso:e.target.value===""?null:Number(e.target.value)})}
+              placeholder="%" style={red(act.peso===null||act.peso===undefined||act.peso==="")}/>
+          </div>
+        </div>
+
+        {/* RAs */}
+        <div>
+          <label style={{ fontSize:12, fontWeight:600, color:"#475569", display:"block", marginBottom:8 }}>
+            Resultados de Aprendizaje *
+            {(!act.ras||act.ras.length===0) && <span style={{ color:"#dc2626", fontWeight:400, marginLeft:8 }}>⚠ obligatorio</span>}
           </label>
-        ))}
-        {(!act.ras||act.ras.length===0)&&<span style={{ color:"#dc2626", fontSize:11 }}>⚠ obligatorio</span>}
-        <div style={{ flex:1 }}/>
-        <button onClick={onRemove} style={{ ...DB, fontSize:12 }}>🗑 Eliminar</button>
-        <button onClick={onClose} style={{ ...BS, background:"#059669" }}>✓ Hecho</button>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+            {ras.map(ra=>{
+              const checked = act.ras.includes(ra.id);
+              return (
+                <label key={ra.id} style={{ cursor:"pointer", display:"flex", alignItems:"center", gap:7,
+                  background:checked?"#eef2ff":"#f8fafc", border:`1px solid ${checked?"#c7d2fe":"#e2e8f0"}`,
+                  borderRadius:9, padding:"8px 14px", transition:"all .15s" }}>
+                  <input type="checkbox" checked={checked}
+                    onChange={e=>onUpdate({ras:e.target.checked?[...act.ras,ra.id]:act.ras.filter(r=>r!==ra.id)})}
+                    style={{ accentColor:"#4f46e5" }}/>
+                  <span style={{ fontWeight:700, color:"#4f46e5", fontSize:13 }}>{ra.id}</span>
+                  <span style={{ color:"#64748b", fontSize:11 }}>{ra.titulo.length>30?ra.titulo.slice(0,28)+"…":ra.titulo}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Acciones */}
+        <div style={{ display:"flex", gap:8, justifyContent:"space-between", paddingTop:12, borderTop:"1px solid #f1f5f9" }}>
+          <button onClick={onRemove} style={{ ...DB, padding:"9px 16px", display:"flex", alignItems:"center", gap:6 }}>
+            🗑 Eliminar
+          </button>
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={onClose} style={OB}>Cancelar</button>
+            <button onClick={onClose} style={{ ...BS, background:"#059669", padding:"9px 22px" }}>✓ Hecho</button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -1440,16 +1501,18 @@ export default function CuadernoCalificaciones({
         )}
         {tab==="alumno"         && <TabAlumno/>}
 
-        {/* Panel edición actividad — fuera de TabActividades para evitar remounts */}
-        {tab==="actividades" && editedAct && (
-          <EditActPanel
-            act={editedAct}
-            ras={ras}
-            uds={uds}
-            onUpdate={fields=>updateActividad(editedAct.id, fields)}
-            onClose={()=>setEditingActId(null)}
-            onRemove={()=>{ removeActividad(editedAct.id); setEditingActId(null); }}
-          />
+        {/* Modal edición actividad */}
+        {editedAct && (
+          <Modal onClose={()=>setEditingActId(null)}>
+            <EditActPanel
+              act={editedAct}
+              ras={ras}
+              uds={uds}
+              onUpdate={fields=>updateActividad(editedAct.id, fields)}
+              onClose={()=>setEditingActId(null)}
+              onRemove={()=>{ removeActividad(editedAct.id); setEditingActId(null); }}
+            />
+          </Modal>
         )}
       </div>
     </div>
