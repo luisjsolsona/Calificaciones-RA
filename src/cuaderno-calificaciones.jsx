@@ -367,10 +367,11 @@ function NotaEditor({ nota, obs, onSave, onCancel }) {
         onChange={e=>setN(e.target.value)} autoFocus
         placeholder="Nota (0-10)"
         style={{ ...IS, padding:"5px 8px", fontSize:14, textAlign:"center" }}/>
-      <input value={o} onChange={e=>setO(e.target.value)}
-        placeholder="Observación..."
-        onKeyDown={e=>{ if(e.key==="Enter")onSave(n,o); if(e.key==="Escape")onCancel(); }}
-        style={{ ...IS, padding:"5px 8px", fontSize:12 }}/>
+      <textarea value={o} onChange={e=>setO(e.target.value)}
+        placeholder="Observación del docente..."
+        rows={4}
+        onKeyDown={e=>{ if(e.key==="Escape")onCancel(); }}
+        style={{ ...IS, padding:"6px 8px", fontSize:12, resize:"vertical", lineHeight:1.55, minHeight:72 }}/>
       <div style={{ display:"flex", gap:6 }}>
         <button onClick={()=>onSave(n,o)}
           style={{ ...BS, flex:1, padding:"6px 0", fontSize:12 }}>✓ Guardar</button>
@@ -1285,8 +1286,22 @@ export default function CuadernoCalificaciones({
                         <td style={{ ...TD, textAlign:"center" }}>{tipoBadge(act.tipo)}</td>
                         <td style={{ ...TD, textAlign:"center", color:"#64748b", fontSize:12 }}>{act.ud||"—"}</td>
                         <td style={{ ...TD, textAlign:"center", color:"#94a3b8", fontSize:12 }}>{act.peso}%</td>
-                        <td style={{ ...TD, textAlign:"center" }}>{notaBadge(nota===""?null:nota)}</td>
-                        <td style={{ ...TD, color:"#64748b", fontSize:12 }}>{obs || <span style={{ color:"#cbd5e1" }}>—</span>}</td>
+                        {/* Nota — editable para docente/admin */}
+                        <td style={{ ...TD, textAlign:"center", verticalAlign:"middle",
+                            cursor:readOnly?"default":"pointer" }}
+                          onClick={()=>{ const k=`${act.id}-${al.id}`; !readOnly && editingNota!==k && setEditingNota(k); }}>
+                          {editingNota===`${act.id}-${al.id}` && !readOnly
+                            ? <NotaEditor nota={nota} obs={obs}
+                                onSave={(n,o)=>saveNota(act.id,al.id,n,o)}
+                                onCancel={()=>setEditingNota(null)}/>
+                            : <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:4 }}>
+                                {notaBadge(nota===""?null:nota)}
+                                {!readOnly && <span style={{ fontSize:10, color:"#94a3b8" }}>✏</span>}
+                              </div>}
+                        </td>
+                        <td style={{ ...TD, color:"#64748b", fontSize:12, maxWidth:260 }}>
+                          {obs || <span style={{ color:"#cbd5e1" }}>—</span>}
+                        </td>
                       </tr>
                     );
                   })}
