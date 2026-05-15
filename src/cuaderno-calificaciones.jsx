@@ -431,6 +431,148 @@ function NuevaActividadForm({ ras, uds, alumnos, onAdd }) {
   );
 }
 
+// ─── PESTAÑA CALIFICACIONES (fuera del padre → filtros no pierden foco) ───────
+function SortHeader({ col, label, sortBy, sortDir, onSort, left }) {
+  const active = sortBy === col;
+  return (
+    <th onClick={()=>onSort(col)} style={{ ...TH, cursor:"pointer", userSelect:"none",
+      textAlign:left?"left":"center", color:active?"#4f46e5":"#475569",
+      background:active?"#eef2ff":"transparent", whiteSpace:"nowrap" }}>
+      {label}{active ? (sortDir==="asc"?" ↑":" ↓") : ""}
+    </th>
+  );
+}
+
+function TabCalificaciones({ actividades, alumnos, ras, editingNota, setEditingNota, saveNota, readOnly }) {
+  const [buscar,     setBuscar]     = useState("");
+  const [filtroRA,   setFiltroRA]   = useState("");
+  const [filtroTipo, setFiltroTipo] = useState("");
+  const [sortBy,     setSortBy]     = useState("ra");
+  const [sortDir,    setSortDir]    = useState("asc");
+
+  function toggleSort(col) {
+    if (sortBy === col) setSortDir(d => d==="asc"?"desc":"asc");
+    else { setSortBy(col); setSortDir("asc"); }
+  }
+
+  const lista = [...actividades]
+    .filter(act => {
+      if (buscar     && !act.nombre.toLowerCase().includes(buscar.toLowerCase())) return false;
+      if (filtroRA   && !act.ras.includes(filtroRA))  return false;
+      if (filtroTipo && act.tipo !== filtroTipo)       return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const dir = sortDir==="asc" ? 1 : -1;
+      if (sortBy==="nombre") return a.nombre.localeCompare(b.nombre) * dir;
+      if (sortBy==="tipo")   return a.tipo.localeCompare(b.tipo)     * dir;
+      if (sortBy==="ud")     return (a.ud||"").localeCompare(b.ud||"") * dir;
+      // default: RA
+      return (a.ras[0]||"").localeCompare(b.ras[0]||"") * dir;
+    });
+
+  function exportCSV() {
+    const header = ["Actividad","Tipo","RA","UD","Peso", ...alumnos.map(a=>a.nombre)];
+    const rows   = lista.map(act => [
+      `"${act.nombre.replace(/"/g,'""')}"`, act.tipo,
+      act.ras.join(";"), act.ud||"", act.peso,
+      ...alumnos.map(al => { const n=getNota(act.notas,al.id); return n===""?"-":n; }),
+    ]);
+    const csv  = [header,...rows].map(r=>r.join(",")).join("\n");
+    const blob = new Blob(["﻿"+csv], { type:"text/csv;charset=utf-8;" });
+    const url  = URL.createObjectURL(blob);
+    const a    = Object.assign(document.createElement("a"), { href:url, download:`calificaciones-${new Date().toISOString().slice(0,10)}.csv` });
+    a.click(); URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      {/* Barra de filtros */}
+      <div style={{ display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" }}>
+        <input value={buscar} onChange={e=>setBuscar(e.target.value)}
+          placeholder="🔍 Buscar actividad..." style={{ ...IS, maxWidth:220 }}/>
+        <select value={filtroRA} onChange={e=>setFiltroRA(e.target.value)} style={{ ...IS, width:"auto" }}>
+          <option value="">Todos los RAs</option>
+          {ras.map(ra=><option key={ra.id} value={ra.id}>{ra.id} — {ra.titulo}</option>)}
+        </select>
+        <select value={filtroTipo} onChange={e=>setFiltroTipo(e.target.value)} style={{ ...IS, width:"auto" }}>
+          <option value="">Todos los tipos</option>
+          <option value="actividad">📋 Actividades</option>
+          <option value="examen">📄 Exámenes</option>
+        </select>
+        <span style={{ color:"#64748b", fontSize:12, marginLeft:"auto" }}>
+          {lista.length} / {actividades.length} actividades
+        </span>
+        <button onClick={exportCSV} style={OB}>↓ CSV</button>
+        {(buscar||filtroRA||filtroTipo) && (
+          <button onClick={()=>{setBuscar("");setFiltroRA("");setFiltroTipo("");}}
+            style={{ ...OB, color:"#dc2626", borderColor:"#fca5a5" }}>✕ Limpiar</button>
+        )}
+      </div>
+
+      {/* Tabla */}
+      <div style={{ borderRadius:12, overflow:"auto", border:"1px solid #e2e8f0", boxShadow:SH }}>
+        <table style={{ width:"100%", borderCollapse:"collapse", minWidth:500 }}>
+          <thead style={{ position:"sticky", top:0, zIndex:10 }}>
+            <tr style={{ background:"#f1f5f9" }}>
+              <SortHeader col="nombre" label="Actividad" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} left/>
+              <SortHeader col="tipo"   label="Tipo"      sortBy={sortBy} sortDir={sortDir} onSort={toggleSort}/>
+              <SortHeader col="ra"     label="RA"        sortBy={sortBy} sortDir={sortDir} onSort={toggleSort}/>
+              <SortHeader col="ud"     label="UD"        sortBy={sortBy} sortDir={sortDir} onSort={toggleSort}/>
+              {alumnos.map(al=>(
+                <th key={al.id} style={{ ...TH, minWidth:90 }}>{al.nombre.split(",")[0]}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {lista.length === 0 ? (
+              <tr><td colSpan={4+alumnos.length} style={{ ...TD, textAlign:"center", color:"#94a3b8", padding:40 }}>
+                Sin resultados para los filtros aplicados
+              </td></tr>
+            ) : lista.map((act,i) => {
+              const inc = actividadIncompleta(act);
+              return (
+                <tr key={act.id} style={{ background:i%2===0?"#fff":"#f8fafc", borderLeft:inc?"3px solid #fca5a5":"3px solid transparent" }}>
+                  <td style={TD}>
+                    {inc && <span title={actividadProblemas(act).join(", ")} style={{ color:"#dc2626", marginRight:5 }}>⚠</span>}
+                    {act.nombre}
+                  </td>
+                  <td style={{ ...TD, textAlign:"center" }}>{tipoBadge(act.tipo)}</td>
+                  <td style={{ ...TD, textAlign:"center" }}>
+                    {act.ras.map(r=>(
+                      <span key={r} style={{ fontSize:10, background:"#eef2ff", color:"#4f46e5", border:"1px solid #c7d2fe", borderRadius:4, padding:"1px 5px", marginRight:3 }}>{r}</span>
+                    ))}
+                  </td>
+                  <td style={{ ...TD, textAlign:"center", fontSize:12, color:"#64748b" }}>{act.ud||"—"}</td>
+                  {alumnos.map(al => {
+                    const k    = `${act.id}-${al.id}`;
+                    const nota = getNota(act.notas, al.id);
+                    const obs  = getObs(act.notas, al.id);
+                    return (
+                      <td key={al.id} style={{ ...TD, textAlign:"center", cursor:readOnly?"default":"pointer", verticalAlign:"middle" }}
+                        onClick={()=>!readOnly && editingNota!==k && setEditingNota(k)}>
+                        {editingNota===k && !readOnly
+                          ? <NotaEditor nota={nota} obs={obs}
+                              onSave={(n,o)=>saveNota(act.id,al.id,n,o)}
+                              onCancel={()=>setEditingNota(null)}/>
+                          : <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:3 }}>
+                              {notaBadge(nota)}
+                              {obs && <span title={obs} style={{ fontSize:13, cursor:"help" }}>💬</span>}
+                            </div>}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {!readOnly && <p style={{ color:"#94a3b8", fontSize:12, margin:0 }}>💡 Clic en una celda para añadir nota y observación · Cabeceras de columna para ordenar</p>}
+    </div>
+  );
+}
+
 // ─── COMPONENTE PRINCIPAL ────────────────────────────────────────────────────
 export default function CuadernoCalificaciones({
   initialData,   // { alumnos, ras, uds, actividades }
@@ -639,12 +781,13 @@ export default function CuadernoCalificaciones({
 
   // ── Operaciones básicas ───────────────────────────────────────────────────
   const allTabs = [
-    { id:"resumen",     label:"📊 Resumen" },
-    { id:"alumnos",     label:"👥 Alumnos" },
-    { id:"ras",         label:"🎯 RAs" },
-    { id:"uds",         label:"📚 UDs" },
-    { id:"actividades", label:"📝 Actividades" },
-    { id:"alumno",      label:"🔍 Por alumno" },
+    { id:"resumen",        label:"📊 Resumen" },
+    { id:"alumnos",        label:"👥 Alumnos" },
+    { id:"ras",            label:"🎯 RAs" },
+    { id:"uds",            label:"📚 UDs" },
+    { id:"actividades",    label:"📝 Actividades" },
+    { id:"calificaciones", label:"📋 Calificaciones" },
+    { id:"alumno",         label:"🔍 Por alumno" },
   ];
   // Alumno solo ve Resumen y su ficha
   const tabs = readOnly ? allTabs.filter(t => t.id==="resumen" || t.id==="alumno") : allTabs;
@@ -1041,57 +1184,7 @@ export default function CuadernoCalificaciones({
             </div>
           );
         })}
-        {/* Tabla notas */}
-        <div style={{ borderRadius:12, overflow:"auto", border:"1px solid #e2e8f0", maxHeight:400, boxShadow:SH }}>
-          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:500 }}>
-            <thead style={{ position:"sticky", top:0, zIndex:10 }}>
-              <tr style={{ background:"#f1f5f9" }}>
-                <th style={{ ...TH, textAlign:"left", minWidth:160 }}>Actividad</th>
-                <th style={TH}>Tipo</th><th style={TH}>RA</th>
-                {alumnos.map(al=><th key={al.id} style={{ ...TH, minWidth:72 }}>{al.nombre.split(",")[0]}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {ras.map(ra=>{
-                const grupo=[
-                  ...actividades.filter(a=>a.ras.includes(ra.id)&&a.tipo==="actividad").sort((a,b)=>(a.orden??0)-(b.orden??0)),
-                  ...actividades.filter(a=>a.ras.includes(ra.id)&&a.tipo==="examen").sort((a,b)=>(a.orden??0)-(b.orden??0)),
-                ];
-                return grupo.map((act,i)=>{
-                  const inc=actividadIncompleta(act);
-                  return (
-                    <tr key={act.id} style={{ background:i%2===0?"#fff":"#f8fafc", borderLeft:inc?"3px solid #fca5a5":"3px solid transparent" }}>
-                      <td style={TD}>{inc&&<span title={actividadProblemas(act).join(", ")} style={{ color:"#dc2626", marginRight:5 }}>⚠</span>}{act.nombre}</td>
-                      <td style={{ ...TD, textAlign:"center" }}>{tipoBadge(act.tipo)}</td>
-                      <td style={{ ...TD, textAlign:"center" }}>
-                        <span style={{ fontSize:10, background:"#eef2ff", color:"#4f46e5", border:"1px solid #c7d2fe", borderRadius:4, padding:"1px 5px" }}>{ra.id}</span>
-                      </td>
-                      {alumnos.map(al=>{
-                        const k    = `${act.id}-${al.id}`;
-                        const nota = getNota(act.notas, al.id);
-                        const obs  = getObs(act.notas, al.id);
-                        return (
-                          <td key={al.id} style={{ ...TD, textAlign:"center", cursor:readOnly?"default":"pointer", verticalAlign:"middle" }}
-                            onClick={()=>!readOnly && editingNota!==k && setEditingNota(k)}>
-                            {editingNota===k && !readOnly
-                              ? <NotaEditor nota={nota} obs={obs}
-                                  onSave={(n,o)=>saveNota(act.id,al.id,n,o)}
-                                  onCancel={()=>setEditingNota(null)}/>
-                              : <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:3 }}>
-                                  {notaBadge(nota)}
-                                  {obs && <span title={obs} style={{ fontSize:13, cursor:"help" }}>💬</span>}
-                                </div>}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                });
-              })}
-            </tbody>
-          </table>
-        </div>
-        <p style={{ color:"#94a3b8", fontSize:12, margin:0 }}>💡 Arrastra ⠿ para reordenar · ✏ para editar · Clic en nota para modificar</p>
+        <p style={{ color:"#94a3b8", fontSize:12, margin:0 }}>💡 Arrastra ⠿ para reordenar · ✏ para editar · Las notas se introducen en la pestaña 📋 Calificaciones</p>
       </div>
     );
   }
@@ -1273,8 +1366,19 @@ export default function CuadernoCalificaciones({
         {tab==="alumnos"     && <TabAlumnos/>}
         {tab==="ras"         && <TabRAs/>}
         {tab==="uds"         && <TabUDs/>}
-        {tab==="actividades" && <TabActividades/>}
-        {tab==="alumno"      && <TabAlumno/>}
+        {tab==="actividades"    && <TabActividades/>}
+        {tab==="calificaciones" && (
+          <TabCalificaciones
+            actividades={actividades}
+            alumnos={alumnos}
+            ras={ras}
+            editingNota={editingNota}
+            setEditingNota={setEditingNota}
+            saveNota={saveNota}
+            readOnly={readOnly}
+          />
+        )}
+        {tab==="alumno"         && <TabAlumno/>}
 
         {/* Panel edición actividad — fuera de TabActividades para evitar remounts */}
         {tab==="actividades" && editedAct && (
