@@ -1,74 +1,86 @@
 import { useState, useEffect } from "react";
-import { loadStore, saveStore } from "./store.js";
+import { api } from "./api.js";
 import Login from "./Login.jsx";
 import Dashboard from "./Dashboard.jsx";
 import CuadernoCalificaciones from "./cuaderno-calificaciones.jsx";
 
 export default function App() {
-  const [store,            setStore]            = useState(() => loadStore());
-  const [view,             setView]             = useState("login");
-  const [currentCuadernoId, setCurrentCuadernoId] = useState(null);
+  const [currentUser,        setCurrentUser]        = useState(null);
+  const [cuadernos,          setCuadernos]          = useState([]);
+  const [view,               setView]               = useState("loading");
+  const [currentCuadernoId,  setCurrentCuadernoId]  = useState(null);
 
-  // Persistir store en localStorage en cada cambio
-  useEffect(() => { saveStore(store); }, [store]);
-
-  // Restaurar sesión al cargar
+  // Restaurar sesión desde JWT guardado
   useEffect(() => {
-    if (store.session?.userId) setView("dashboard");
+    const token = localStorage.getItem('token');
+    if (!token) { setView("login"); return; }
+    api.me()
+      .then(u => { setCurrentUser(u); setView("dashboard"); })
+      .catch(() => { localStorage.removeItem('token'); setView("login"); });
   }, []);
 
-  const currentUser    = store.users.find(u => u.id === store.session?.userId) || null;
-  const currentCuaderno = store.cuadernos.find(c => c.id === currentCuadernoId) || null;
+  // Cargar cuadernos al entrar al dashboard
+  useEffect(() => {
+    if (view === "dashboard" && currentUser)
+      api.getCuadernos().then(setCuadernos).catch(console.error);
+  }, [view, currentUser]);
 
-  function handleLogin(userId) {
-    setStore(prev => ({ ...prev, session:{ userId } }));
+  async function handleLogin(login, password) {
+    const { token, user } = await api.login(login, password);
+    localStorage.setItem('token', token);
+    setCurrentUser(user);
     setView("dashboard");
   }
+
   function handleLogout() {
-    setStore(prev => ({ ...prev, session:null }));
+    localStorage.removeItem('token');
+    setCurrentUser(null); setCuadernos([]); setCurrentCuadernoId(null);
     setView("login");
-    setCurrentCuadernoId(null);
   }
-  function openCuaderno(id) {
+
+  async function openCuaderno(id) {
+    const c = await api.getCuaderno(id);
+    setCuadernos(prev =>
+      prev.some(x => x.id === id) ? prev.map(x => x.id === id ? c : x) : [...prev, c]
+    );
     setCurrentCuadernoId(id);
     setView("gradebook");
   }
-  function handleSaveCuaderno(data) {
-    setStore(prev => ({
-      ...prev,
-      cuadernos: prev.cuadernos.map(c => c.id === currentCuadernoId ? { ...c, data } : c),
-    }));
-  }
-  function handleUpdateStore(updater) {
-    setStore(prev => ({ ...prev, ...updater(prev) }));
+
+  async function handleSaveCuaderno(datos) {
+    await api.saveCuaderno(currentCuadernoId, datos);
   }
 
-  if (view === "login" || !currentUser) {
-    return <Login users={store.users} onLogin={handleLogin}/>;
-  }
-  if (view === "dashboard") {
-    return (
-      <Dashboard
-        store={store}
-        currentUser={currentUser}
-        onOpenCuaderno={openCuaderno}
-        onLogout={handleLogout}
-        onUpdateStore={handleUpdateStore}
-      />
-    );
-  }
-  if (view === "gradebook" && currentCuaderno) {
-    return (
-      <CuadernoCalificaciones
-        key={currentCuadernoId}
-        initialData={currentCuaderno.data}
-        cuaderno={currentCuaderno}
-        currentUser={currentUser}
-        allUsers={store.users}
-        onSave={handleSaveCuaderno}
-        onBack={() => setView("dashboard")}
-      />
-    );
-  }
-  return <Login users={store.users} onLogin={handleLogin}/>;
+  const currentCuaderno = cuadernos.find(c => c.id === currentCuadernoId);
+
+  if (view === "loading") return (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh",
+      fontFamily:"'DM Sans',sans-serif", color:"#64748b", fontSize:15 }}>
+      Cargando...
+    </div>
+  );
+
+  if (view === "login") return <Login onLogin={handleLogin}/>;
+
+  if (view === "dashboard") return (
+    <Dashboard
+      cuadernos={cuadernos} setCuadernos={setCuadernos}
+      currentUser={currentUser}
+      onOpenCuaderno={openCuaderno}
+      onLogout={handleLogout}
+    />
+  );
+
+  if (view === "gradebook" && currentCuaderno) return (
+    <CuadernoCalificaciones
+      key={currentCuadernoId}
+      initialData={currentCuaderno.datos || {}}
+      cuaderno={currentCuaderno}
+      currentUser={{ ...currentUser, role: currentUser.rol }}
+      onSave={handleSaveCuaderno}
+      onBack={() => setView("dashboard")}
+    />
+  );
+
+  return <Login onLogin={handleLogin}/>;
 }

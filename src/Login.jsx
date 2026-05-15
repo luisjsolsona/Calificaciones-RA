@@ -16,63 +16,63 @@ function NotebookIcon({ size = 44 }) {
   );
 }
 
-export default function Login({ users, onLogin }) {
-  const [usuario,  setUsuario]  = useState("");
+export default function Login({ onLogin }) {
+  const [login,    setLogin]    = useState("");
   const [password, setPassword] = useState("");
   const [error,    setError]    = useState("");
+  const [loading,  setLoading]  = useState(false);
 
-  function handleLogin() {
-    const user = users.find(u => u.usuario === usuario.trim());
-    if (!user || user.password !== password) {
-      setError("Usuario o contraseña incorrectos");
-      return;
-    }
-    onLogin(user.id);
+  async function handleSubmit() {
+    if (!login.trim() || !password) return;
+    setLoading(true); setError("");
+    try {
+      await onLogin(login.trim(), password);
+    } catch (e) {
+      setError(e.message || "Usuario o contraseña incorrectos");
+    } finally { setLoading(false); }
   }
 
   const IS = {
     width:"100%", border:"1px solid #e2e8f0", borderRadius:8, padding:"11px 14px",
-    fontSize:14, outline:"none", boxSizing:"border-box", color:"#0f172a",
-    background:"#f8fafc",
+    fontSize:14, outline:"none", boxSizing:"border-box", color:"#0f172a", background:"#f8fafc",
   };
 
   return (
-    <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#eef2ff 0%,#e0f2fe 100%)", display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-      <div style={{ background:"#ffffff", borderRadius:20, padding:"44px 40px", width:"100%", maxWidth:380, boxShadow:"0 8px 40px rgba(0,0,0,0.12)" }}>
+    <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#eef2ff 0%,#e0f2fe 100%)",
+      display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+      <div style={{ background:"#fff", borderRadius:20, padding:"44px 40px", width:"100%",
+        maxWidth:380, boxShadow:"0 8px 40px rgba(0,0,0,0.12)" }}>
 
-        {/* Logo */}
         <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:36 }}>
           <NotebookIcon size={44}/>
           <div>
-            <h1 style={{ margin:0, fontSize:19, fontWeight:800, color:"#0f172a", letterSpacing:-.5 }}>Cuaderno de Calificaciones</h1>
-            <p  style={{ margin:0, fontSize:12, color:"#64748b" }}>Formación Profesional · Aragón</p>
+            <h1 style={{ margin:0, fontSize:19, fontWeight:800, color:"#0f172a", letterSpacing:-.5 }}>
+              Cuaderno de Calificaciones
+            </h1>
+            <p style={{ margin:0, fontSize:12, color:"#64748b" }}>Formación Profesional · Aragón</p>
           </div>
         </div>
 
-        {/* Formulario */}
         <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
           <div>
-            <label style={{ fontSize:13, fontWeight:600, color:"#475569", display:"block", marginBottom:6 }}>Usuario</label>
-            <input
-              value={usuario}
-              autoFocus
-              onChange={e => { setUsuario(e.target.value); setError(""); }}
-              onKeyDown={e => e.key==="Enter" && document.getElementById("pwd-input").focus()}
-              placeholder="nombre de usuario"
-              style={{ ...IS, border:`1px solid ${error?"#fca5a5":"#e2e8f0"}` }}
-            />
+            <label style={{ fontSize:13, fontWeight:600, color:"#475569", display:"block", marginBottom:6 }}>
+              Usuario o email
+            </label>
+            <input value={login} autoFocus
+              onChange={e => { setLogin(e.target.value); setError(""); }}
+              onKeyDown={e => e.key === "Enter" && document.getElementById("pwd").focus()}
+              placeholder="admin o admin@centro.es"
+              style={{ ...IS, border:`1px solid ${error ? "#fca5a5" : "#e2e8f0"}` }}/>
           </div>
           <div>
-            <label style={{ fontSize:13, fontWeight:600, color:"#475569", display:"block", marginBottom:6 }}>Contraseña</label>
-            <input
-              id="pwd-input"
-              type="password"
-              value={password}
+            <label style={{ fontSize:13, fontWeight:600, color:"#475569", display:"block", marginBottom:6 }}>
+              Contraseña
+            </label>
+            <input id="pwd" type="password" value={password}
               onChange={e => { setPassword(e.target.value); setError(""); }}
-              onKeyDown={e => e.key==="Enter" && handleLogin()}
+              onKeyDown={e => e.key === "Enter" && handleSubmit()}
               placeholder="••••••••"
-              style={{ ...IS, border:`1px solid ${error?"#fca5a5":"#e2e8f0"}` }}
-            />
+              style={{ ...IS, border:`1px solid ${error ? "#fca5a5" : "#e2e8f0"}` }}/>
           </div>
 
           {error && (
@@ -81,30 +81,27 @@ export default function Login({ users, onLogin }) {
             </div>
           )}
 
-          <button onClick={handleLogin} style={{
-            width:"100%", background:"#4f46e5", color:"#fff", border:"none", borderRadius:8,
-            padding:"13px", fontSize:14, fontWeight:700, cursor:"pointer", marginTop:4,
+          <button onClick={handleSubmit} disabled={loading || !login.trim() || !password} style={{
+            width:"100%", background:loading ? "#94a3b8" : "#4f46e5", color:"#fff",
+            border:"none", borderRadius:8, padding:"13px", fontSize:14, fontWeight:700,
+            cursor: loading ? "wait" : "pointer", marginTop:4,
+            opacity: (!login.trim() || !password) ? 0.6 : 1,
           }}>
-            Iniciar sesión →
+            {loading ? "Entrando..." : "Iniciar sesión →"}
           </button>
         </div>
 
-        {/* Credenciales demo */}
-        <div style={{ marginTop:24, padding:"14px 16px", background:"#f8fafc", borderRadius:10, border:"1px solid #e2e8f0" }}>
-          <p style={{ margin:"0 0 8px", fontSize:11, fontWeight:700, color:"#64748b", textTransform:"uppercase", letterSpacing:.6 }}>Credenciales demo</p>
-          <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-            {[
-              { rol:"🛡️ Admin",   user:"admin",    pwd:"admin" },
-              { rol:"📚 Docente", user:"garcia",   pwd:"1234"  },
-              { rol:"🎓 Alumno",  user:"ana",      pwd:"1111"  },
-            ].map(d => (
-              <div key={d.user} style={{ display:"flex", gap:8, fontSize:12, color:"#475569" }}>
-                <span style={{ width:90 }}>{d.rol}</span>
-                <code style={{ color:"#4f46e5" }}>{d.user}</code>
-                <span style={{ color:"#94a3b8" }}>/ {d.pwd}</span>
-              </div>
-            ))}
-          </div>
+        <div style={{ marginTop:24, padding:"12px 16px", background:"#f8fafc",
+          borderRadius:10, border:"1px solid #e2e8f0" }}>
+          <p style={{ margin:"0 0 4px", fontSize:11, fontWeight:700, color:"#64748b",
+            textTransform:"uppercase", letterSpacing:.6 }}>Acceso inicial</p>
+          <p style={{ margin:0, fontSize:12, color:"#475569" }}>
+            <strong>Admin:</strong> <code style={{ color:"#4f46e5" }}>admin</code>{" "}
+            / <code style={{ color:"#4f46e5" }}>admin1234</code>
+          </p>
+          <p style={{ margin:"4px 0 0", fontSize:11, color:"#94a3b8" }}>
+            Crea docentes y alumnos desde el panel de administración
+          </p>
         </div>
       </div>
     </div>

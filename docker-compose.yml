@@ -5,16 +5,36 @@ services:
     build:
       context: .
     ports:
-      - target: 80
-        published: "8500"
-        protocol: tcp
+      - "8500:80"
     restart: unless-stopped
-    network_mode: bridge
+    depends_on:
+      - backend
+    networks:
+      - app-net
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/"]
       interval: 30s
       timeout: 5s
       retries: 3
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      - JWT_SECRET=cuaderno_jwt_secret_2024_cambiame
+      - DB_PATH=/data/calificaciones.db
+    volumes:
+      - db-data:/data
+    networks:
+      - app-net
+
+networks:
+  app-net:
+    driver: bridge
+
+volumes:
+  db-data:
 
 x-casaos:
   architectures:
@@ -30,23 +50,11 @@ x-casaos:
     es_es: Cuaderno Calificaciones RA
   tagline:
     en_us: FP Gradebook — Learning Outcomes
-    es_es: Cuaderno de calificaciones para Formación Profesional
+    es_es: Cuaderno de calificaciones para Formacion Profesional
   description:
-    en_us: |
-      Gradebook for Spanish Vocational Training (Formación Profesional).
-      Manage Learning Outcomes (RAs), Didactic Units, Activities and Exams
-      with automatic weighted grade calculation, charts and per-student reports.
-      Import/export data as JSON or plain semicolon-separated text.
-      Data is saved automatically in the browser (localStorage).
-    es_es: |
-      Cuaderno de calificaciones para Formación Profesional.
-      Gestiona Resultados de Aprendizaje, Unidades Didácticas, Actividades y
-      Exámenes con cálculo automático ponderado, gráficos e informes por alumno.
-      Importa/exporta datos como JSON o texto plano separado por punto y coma.
-      Los datos se guardan automáticamente en el navegador.
+    en_us: Gradebook for Spanish Vocational Training with multi-user backend.
+    es_es: Cuaderno de calificaciones para FP con backend multiusuario.
   category: Education
   developer: luisjsolsona
   author: luisjsolsona
   icon: https://raw.githubusercontent.com/luisjsolsona/Calificaciones-RA/main/icon.svg
-  screenshot_link: []
-  thumbnail: https://raw.githubusercontent.com/luisjsolsona/Calificaciones-RA/main/icon.svg
