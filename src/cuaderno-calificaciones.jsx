@@ -1002,65 +1002,39 @@ export default function CuadernoCalificaciones({
     );
   }
 
-  // ── ALUMNOS ──────────────────────────────────────────────────────────────
+  // ── ALUMNOS (solo lectura — gestionados desde Inscripciones) ──────────────
   function TabAlumnos() {
     return (
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-        <div style={{ display:"flex", gap:8, flexWrap:"wrap", justifyContent:"space-between" }}>
-          <div style={{ display:"flex", gap:8, flex:1 }}>
-            <input value={nuevoAlumno} onChange={e=>setNuevoAlumno(e.target.value)}
-              onKeyDown={e=>e.key==="Enter"&&addAlumno()} placeholder="Apellidos, Nombre" style={IS}/>
-            <button onClick={addAlumno} style={BS}>+ Añadir</button>
-          </div>
-          <div style={{ display:"flex", gap:8 }}>
-            <button onClick={()=>downloadJSON(alumnos,"alumnos")} style={OB}>↓ Exportar</button>
-            <button onClick={()=>setShowImportAlumnos(v=>!v)} style={showImportAlumnos?BS:OB}>↑ Importar</button>
-          </div>
+        <div style={{ background:"#eef2ff", border:"1px solid #c7d2fe", borderRadius:10,
+          padding:"10px 16px", fontSize:13, color:"#4338ca" }}>
+          Los alumnos se gestionan desde <strong>Dashboard → boton 👥 del cuaderno</strong>.
+          Inscribe alumnos al cuaderno para que aparezcan aqui y puedan ver sus notas.
         </div>
-        {showImportAlumnos && (
-          <ImportPanel
-            placeholder={"Un nombre por línea:\n  García López, Ana\n  Martínez Ruiz, Carlos\n\nO JSON:\n  [{\"nombre\": \"García López, Ana\"}, ...]"}
-            onImport={handleImportAlumnos}
-            onClose={()=>setShowImportAlumnos(false)}
-          />
-        )}
         <div style={{ borderRadius:12, overflow:"hidden", border:"1px solid #e2e8f0", boxShadow:SH }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead><tr style={{ background:"#f1f5f9" }}>
-              <th style={TH}>#</th><th style={{ ...TH, textAlign:"left" }}>Nombre</th><th style={TH}>Nota final</th><th style={TH}>Acciones</th>
+              <th style={TH}>#</th>
+              <th style={{ ...TH, textAlign:"left" }}>Nombre</th>
+              <th style={TH}>Nota final</th>
             </tr></thead>
             <tbody>
-              {alumnos.map((al,i)=>(
+              {alumnos.length === 0 ? (
+                <tr><td colSpan={3} style={{ ...TD, textAlign:"center", color:"#94a3b8", padding:40 }}>
+                  Sin alumnos inscritos en este cuaderno
+                </td></tr>
+              ) : alumnos.map((al,i)=>(
                 <tr key={al.id} style={{ background:i%2===0?"#fff":"#f8fafc" }}>
                   <td style={{ ...TD, color:"#94a3b8" }}>{i+1}</td>
                   <td style={TD}>
-                    {editingAlumnoId===al.id ? (
-                      <input
-                        defaultValue={al.nombre}
-                        autoFocus
-                        placeholder="Apellidos, Nombre"
-                        style={{ ...IS, padding:"4px 8px", fontSize:13 }}
-                        onBlur={e=>{ setAlumnos(prev=>prev.map(a=>a.id===al.id?{...a,nombre:e.target.value.trim()||a.nombre}:a)); setEditingAlumnoId(null); }}
-                        onKeyDown={e=>{
-                          if (e.key==="Enter") { setAlumnos(prev=>prev.map(a=>a.id===al.id?{...a,nombre:e.target.value.trim()||a.nombre}:a)); setEditingAlumnoId(null); }
-                          if (e.key==="Escape") setEditingAlumnoId(null);
-                        }}
-                      />
-                    ) : (
-                      <span
-                        onClick={()=>{ setAlumnoSel(al.id); setTab("alumno"); }}
-                        title="Ver ficha del alumno"
-                        style={{ cursor:"pointer", color:"#4f46e5", fontWeight:500, textDecoration:"underline dotted" }}>
-                        {al.nombre}
-                      </span>
-                    )}
+                    <span onClick={()=>{ setAlumnoSel(al.id); setTab("alumno"); }}
+                      title="Ver ficha del alumno"
+                      style={{ cursor:"pointer", color:"#4f46e5", fontWeight:500, textDecoration:"underline dotted" }}>
+                      {al.nombre}
+                    </span>
                   </td>
-                  <td style={{ ...TD, textAlign:"center" }}>{notaBadge(calcNotaFinal(al.id,ras,actividades))}</td>
                   <td style={{ ...TD, textAlign:"center" }}>
-                    <button onClick={()=>setEditingAlumnoId(al.id===editingAlumnoId?null:al.id)} style={{ ...LB, border:"1px solid #e2e8f0", borderRadius:6, padding:"3px 10px", marginRight:6, fontWeight:500, color:editingAlumnoId===al.id?"#4f46e5":"#475569" }}>
-                      {editingAlumnoId===al.id?"✓ Hecho":"✏ Editar"}
-                    </button>
-                    <button onClick={()=>removeAlumno(al.id)} style={DB}>✕</button>
+                    {notaBadge(calcNotaFinal(al.id,ras,actividades))}
                   </td>
                 </tr>
               ))}

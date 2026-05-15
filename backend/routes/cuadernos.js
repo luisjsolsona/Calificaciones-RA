@@ -38,7 +38,14 @@ router.get('/:id', auth(), (req, res) => {
   } else if (rol === 'docente' && c.docente_id !== id) {
     return res.status(403).json({ error: 'Sin acceso' });
   }
-  res.json({ ...c, datos: JSON.parse(c.datos || '{}') });
+  const datos = JSON.parse(c.datos || '{}');
+  // Alumnos SIEMPRE desde inscripciones, no desde datos.alumnos
+  datos.alumnos = db.prepare(
+    'SELECT u.id, COALESCE(u.alumno_nombre, u.nombre) as nombre '
+    + 'FROM inscripciones i JOIN usuarios u ON i.alumno_id=u.id '
+    + 'WHERE i.cuaderno_id=? ORDER BY u.nombre'
+  ).all(c.id);
+  res.json({ ...c, datos });
 });
 
 // PUT /api/cuadernos/:id  (guardar datos del cuaderno)
