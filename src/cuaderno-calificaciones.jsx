@@ -341,6 +341,56 @@ function UDCard({ ud, onUpdate, onRemove }) {
   );
 }
 
+// ─── FORMULARIO NUEVA ACTIVIDAD (fuera del padre → estado local) ─────────────
+function NuevaActividadForm({ ras, uds, alumnos, onAdd }) {
+  const [nombre, setNombre] = useState("");
+  const [tipo,   setTipo]   = useState("actividad");
+  const [rasArr, setRasArr] = useState([]);
+  const [ud,     setUd]     = useState("");
+  const [peso,   setPeso]   = useState(50);
+
+  function submit() {
+    if (!nombre.trim() || !rasArr.length) return;
+    const notas = Object.fromEntries(alumnos.map(a => [a.id, ""]));
+    onAdd({ nombre: nombre.trim(), tipo, ras: rasArr, ud, peso: Number(peso), notas });
+    setNombre(""); setTipo("actividad"); setRasArr([]); setUd(""); setPeso(50);
+  }
+
+  return (
+    <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:16, display:"flex", flexDirection:"column", gap:10, boxShadow:SH }}>
+      <h3 style={SL}>Nueva actividad / examen</h3>
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+        <input value={nombre} onChange={e=>setNombre(e.target.value)}
+          onKeyDown={e=>e.key==="Enter"&&submit()}
+          placeholder="Nombre" style={{ ...IS, flex:2 }}/>
+        <select value={tipo} onChange={e=>setTipo(e.target.value)} style={{ ...IS, flex:1 }}>
+          <option value="actividad">📋 Actividad</option>
+          <option value="examen">📄 Examen</option>
+        </select>
+        <select value={ud} onChange={e=>setUd(e.target.value)} style={{ ...IS, flex:1 }}>
+          <option value="">-- UD --</option>
+          {uds.map(u=><option key={u.id} value={u.id}>{u.id}</option>)}
+        </select>
+        <input type="number" min={0} max={100} value={peso}
+          onChange={e=>setPeso(e.target.value)}
+          style={{ ...IS, width:80 }} placeholder="Peso%"/>
+      </div>
+      <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
+        <span style={{ color:"#64748b", fontSize:12 }}>RAs:</span>
+        {ras.map(ra=>(
+          <label key={ra.id} style={{ cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
+            <input type="checkbox" checked={rasArr.includes(ra.id)}
+              onChange={e=>setRasArr(p=>e.target.checked?[...p,ra.id]:p.filter(r=>r!==ra.id))}
+              style={{ accentColor:"#4f46e5" }}/>
+            <span style={{ color:"#334155", fontSize:12 }}>{ra.id}</span>
+          </label>
+        ))}
+        <button onClick={submit} style={BS}>+ Añadir</button>
+      </div>
+    </div>
+  );
+}
+
 // ─── COMPONENTE PRINCIPAL ────────────────────────────────────────────────────
 export default function CuadernoCalificaciones({
   initialData,   // { alumnos, ras, uds, actividades }
@@ -361,7 +411,6 @@ export default function CuadernoCalificaciones({
   const [alumnoSel, setAlumnoSel]     = useState(null);
   const [editingNota, setEditingNota] = useState(null);
   const [nuevoAlumno, setNuevoAlumno] = useState("");
-  const [newAct, setNewAct]           = useState({ nombre:"", tipo:"actividad", ras:[], ud:"", peso:50 });
   const [initialized, setInitialized] = useState(false);
 
   // panel imports
@@ -570,13 +619,10 @@ export default function CuadernoCalificaciones({
     setAlumnos(prev=>[...prev,{ id, nombre:nuevoAlumno.trim() }]);
     setNuevoAlumno("");
   }
-  function addActividad() {
-    if (!newAct.nombre.trim()||!newAct.ras.length) return;
-    const id="A"+Date.now(), notas={};
-    alumnos.forEach(a=>{notas[a.id]="";});
-    const orden=actividades.filter(a=>a.ras.some(r=>newAct.ras.includes(r))&&a.tipo===newAct.tipo).length;
-    setActividades(prev=>[...prev,{...newAct,id,orden,notas}]);
-    setNewAct({ nombre:"", tipo:"actividad", ras:[], ud:"", peso:50 });
+  function addActividad({ nombre, tipo, ras: rasArr, ud, peso, notas }) {
+    const id    = "A"+Date.now();
+    const orden = actividades.filter(a=>a.ras.some(r=>rasArr.includes(r))&&a.tipo===tipo).length;
+    setActividades(prev=>[...prev,{ id, nombre, tipo, ras:rasArr, ud, peso, orden, notas }]);
   }
   function removeAlumno(id)    { setAlumnos(prev=>prev.filter(a=>a.id!==id)); }
   function removeActividad(id) { setActividades(prev=>prev.filter(a=>a.id!==id)); if(editingActId===id) setEditingActId(null); }
@@ -893,15 +939,26 @@ export default function CuadernoCalificaciones({
       );
     }
 
-    const actsFaltantes = actividades.filter(actividadIncompleta).length;
+    const actsIncompletas = actividades.filter(actividadIncompleta);
     return (
       <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
-        {actsFaltantes>0 && (
-          <div style={{ background:"#fef2f2", border:"1px solid #fca5a5", borderRadius:10, padding:"10px 16px", display:"flex", alignItems:"center", gap:10 }}>
-            <span style={{ fontSize:18 }}>⚠️</span>
-            <span style={{ color:"#991b1b", fontSize:13, fontWeight:500 }}>
-              {actsFaltantes} actividad{actsFaltantes>1?"es":""} con campos sin completar. Corrígelas para que el cálculo sea correcto.
-            </span>
+        {actsIncompletas.length>0 && (
+          <div style={{ background:"#fef2f2", border:"1px solid #fca5a5", borderRadius:10, padding:"12px 16px" }}>
+            <div style={{ display:"flex", alignItems:"flex-start", gap:10 }}>
+              <span style={{ fontSize:18, flexShrink:0 }}>⚠️</span>
+              <div>
+                <div style={{ color:"#991b1b", fontSize:13, fontWeight:600, marginBottom:6 }}>
+                  {actsIncompletas.length} actividad{actsIncompletas.length>1?"es":""} con campos sin completar:
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+                  {actsIncompletas.map(act=>(
+                    <div key={act.id} style={{ fontSize:12, color:"#b91c1c" }}>
+                      • <strong>{act.nombre||"(sin nombre)"}</strong> — {actividadProblemas(act).join(", ")}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         )}
         <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
@@ -915,34 +972,8 @@ export default function CuadernoCalificaciones({
             onClose={()=>setShowImportActs(false)}
           />
         )}
-        {/* Formulario nueva actividad */}
-        <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:16, display:"flex", flexDirection:"column", gap:10, boxShadow:SH }}>
-          <h3 style={SL}>Nueva actividad / examen</h3>
-          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-            <input value={newAct.nombre} onChange={e=>setNewAct(p=>({...p,nombre:e.target.value}))} placeholder="Nombre" style={{ ...IS, flex:2 }}/>
-            <select value={newAct.tipo} onChange={e=>setNewAct(p=>({...p,tipo:e.target.value}))} style={{ ...IS, flex:1 }}>
-              <option value="actividad">📋 Actividad</option>
-              <option value="examen">📄 Examen</option>
-            </select>
-            <select value={newAct.ud} onChange={e=>setNewAct(p=>({...p,ud:e.target.value}))} style={{ ...IS, flex:1 }}>
-              <option value="">-- UD --</option>
-              {uds.map(ud=><option key={ud.id} value={ud.id}>{ud.id}</option>)}
-            </select>
-            <input type="number" min={0} max={100} value={newAct.peso} onChange={e=>setNewAct(p=>({...p,peso:e.target.value}))} style={{ ...IS, width:80 }} placeholder="Peso%"/>
-          </div>
-          <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
-            <span style={{ color:"#64748b", fontSize:12 }}>RAs:</span>
-            {ras.map(ra=>(
-              <label key={ra.id} style={{ cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
-                <input type="checkbox" checked={newAct.ras.includes(ra.id)}
-                  onChange={e=>setNewAct(p=>({...p,ras:e.target.checked?[...p.ras,ra.id]:p.ras.filter(r=>r!==ra.id)}))}
-                  style={{ accentColor:"#4f46e5" }}/>
-                <span style={{ color:"#334155", fontSize:12 }}>{ra.id}</span>
-              </label>
-            ))}
-            <button onClick={addActividad} style={BS}>+ Añadir</button>
-          </div>
-        </div>
+        {/* Formulario nueva actividad — componente externo para evitar remounts */}
+        <NuevaActividadForm ras={ras} uds={uds} alumnos={alumnos} onAdd={addActividad}/>
         {/* Grupos por RA */}
         {ras.map(ra=>{
           const acts=actsDeRA(ra.id,"actividad"), exams=actsDeRA(ra.id,"examen");
