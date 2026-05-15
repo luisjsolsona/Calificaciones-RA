@@ -342,12 +342,22 @@ function UDCard({ ud, onUpdate, onRemove }) {
 }
 
 // ─── COMPONENTE PRINCIPAL ────────────────────────────────────────────────────
-export default function CuadernoCalificaciones() {
+export default function CuadernoCalificaciones({
+  initialData,   // { alumnos, ras, uds, actividades }
+  onSave,        // callback(data) — cuando se usan props externas
+  currentUser,   // { id, nombre, role, alumnoNombre? }
+  cuaderno,      // { id, titulo, descripcion, modulo, curso, color }
+  onBack,        // callback() — volver al dashboard
+  allUsers,      // todos los usuarios (para admin)
+} = {}) {
+  const role     = currentUser?.role || "admin";
+  const readOnly = role === "alumno";
+
   const [tab, setTab]                 = useState("resumen");
-  const [alumnos, setAlumnos]         = useState(initAlumnos);
-  const [ras, setRAs]                 = useState(initRAs);
-  const [uds, setUDs]                 = useState(initUDs);
-  const [actividades, setActividades] = useState(initActividades);
+  const [alumnos, setAlumnos]         = useState(initialData?.alumnos     || initAlumnos);
+  const [ras, setRAs]                 = useState(initialData?.ras         || initRAs);
+  const [uds, setUDs]                 = useState(initialData?.uds         || initUDs);
+  const [actividades, setActividades] = useState(initialData?.actividades || initActividades);
   const [alumnoSel, setAlumnoSel]     = useState(null);
   const [editingNota, setEditingNota] = useState(null);
   const [nuevoAlumno, setNuevoAlumno] = useState("");
@@ -371,6 +381,7 @@ export default function CuadernoCalificaciones() {
 
   // ── Persistencia ─────────────────────────────────────────────────────────
   useEffect(() => {
+    if (initialData) { setInitialized(true); return; } // datos vienen de props
     try {
       const d = JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");
       if (d.alumnos)     setAlumnos(d.alumnos);
@@ -381,13 +392,20 @@ export default function CuadernoCalificaciones() {
     setInitialized(true);
   }, []);
 
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+
   useEffect(() => {
     if (!initialized) return;
     clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
+      const data = { alumnos, ras, uds, actividades };
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ alumnos, ras, uds, actividades }));
-        // indicador sin setState para no causar re-render
+        if (onSaveRef.current) {
+          onSaveRef.current(data); // modo multi-cuaderno
+        } else {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); // modo standalone
+        }
         if (savedIndicator.current) {
           savedIndicator.current.style.opacity = "1";
           clearTimeout(savedFadeTimer.current);
@@ -399,6 +417,15 @@ export default function CuadernoCalificaciones() {
     }, 800);
     return () => clearTimeout(saveTimerRef.current);
   }, [alumnos, ras, uds, actividades, initialized]);
+
+  // ── Auto-navegación alumno ────────────────────────────────────────────────
+  useEffect(() => {
+    if (role === "alumno" && currentUser?.alumnoNombre) {
+      const al = alumnos.find(a => a.nombre === currentUser.alumnoNombre);
+      if (al) { setAlumnoSel(al.id); setTab("alumno"); }
+      else      setTab("resumen");
+    }
+  }, []);
 
   // ── Backup global ─────────────────────────────────────────────────────────
   function exportTodo() { downloadJSON({ alumnos, ras, uds, actividades }, "cuaderno-ra"); }
@@ -522,7 +549,7 @@ export default function CuadernoCalificaciones() {
   }
 
   // ── Operaciones básicas ───────────────────────────────────────────────────
-  const tabs = [
+  const allTabs = [
     { id:"resumen",     label:"📊 Resumen" },
     { id:"alumnos",     label:"👥 Alumnos" },
     { id:"ras",         label:"🎯 RAs" },
@@ -530,6 +557,8 @@ export default function CuadernoCalificaciones() {
     { id:"actividades", label:"📝 Actividades" },
     { id:"alumno",      label:"🔍 Por alumno" },
   ];
+  // Alumno solo ve Resumen y su ficha
+  const tabs = readOnly ? allTabs.filter(t => t.id==="resumen" || t.id==="alumno") : allTabs;
 
   function saveNota(actId, alumnoId, val) {
     setActividades(prev=>prev.map(a=>a.id===actId?{...a,notas:{...a.notas,[alumnoId]:val===""?"":Number(val)}}:a));
@@ -969,8 +998,8 @@ export default function CuadernoCalificaciones() {
                       {alumnos.map(al=>{
                         const k=`${act.id}-${al.id}`, nota=act.notas[al.id];
                         return (
-                          <td key={al.id} style={{ ...TD, textAlign:"center", cursor:"pointer" }} onClick={()=>setEditingNota(k)}>
-                            {editingNota===k
+                          <td key={al.id} style={{ ...TD, textAlign:"center", cursor:readOnly?"default":"pointer" }} onClick={()=>!readOnly&&setEditingNota(k)}>
+                            {editingNota===k && !readOnly
                               ? <input autoFocus type="number" min={0} max={10} step={0.1} defaultValue={nota}
                                   onBlur={e=>saveNota(act.id,al.id,e.target.value)}
                                   onKeyDown={e=>{ if(e.key==="Enter")saveNota(act.id,al.id,e.target.value); if(e.key==="Escape")setEditingNota(null); }}
@@ -1086,21 +1115,43 @@ export default function CuadernoCalificaciones() {
       {/* CABECERA */}
       <div style={{ background:"linear-gradient(135deg,#eef2ff 0%,#e0f2fe 100%)", borderBottom:"1px solid #e2e8f0", padding:"20px 28px 0", boxShadow:SH }}>
         <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between" }}>
-          <div onClick={()=>setTab("resumen")} style={{ display:"flex", alignItems:"center", gap:12, cursor:"pointer", userSelect:"none" }} title="Ir al resumen">
-            <NotebookIcon size={38}/>
-            <div>
-              <h1 style={{ fontSize:20, fontWeight:800, color:"#0f172a", margin:0, letterSpacing:-.5 }}>Cuaderno de Calificaciones</h1>
-              <p style={{ color:"#64748b", fontSize:12, margin:0 }}>Formación Profesional · Aragón</p>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            {/* Botón volver al dashboard */}
+            {onBack && (
+              <button onClick={onBack} title="Volver a mis cuadernos" style={{
+                background:"none", border:"1px solid #e2e8f0", borderRadius:8, padding:"6px 12px",
+                fontSize:12, color:"#475569", cursor:"pointer", display:"flex", alignItems:"center", gap:5,
+              }}>← Cuadernos</button>
+            )}
+            {/* Logo + título */}
+            <div onClick={()=>setTab("resumen")} style={{ display:"flex", alignItems:"center", gap:12, cursor:"pointer", userSelect:"none" }} title="Ir al resumen">
+              <NotebookIcon size={38}/>
+              <div>
+                <h1 style={{ fontSize:20, fontWeight:800, color:"#0f172a", margin:0, letterSpacing:-.5 }}>
+                  {cuaderno?.titulo || "Cuaderno de Calificaciones"}
+                </h1>
+                <p style={{ color:"#64748b", fontSize:12, margin:0 }}>
+                  {[cuaderno?.modulo, cuaderno?.curso, cuaderno?.descripcion].filter(Boolean).join(" · ") || "Formación Profesional · Aragón"}
+                </p>
+              </div>
             </div>
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:10, paddingBottom:4 }}>
             <span ref={savedIndicator} style={{ opacity:0, transition:"opacity .4s", color:"#059669", fontSize:12, fontWeight:600 }}>✓ Guardado</span>
-            <span style={{ color:"#94a3b8", fontSize:12 }}>{alumnos.length} alumnos · {actividades.length} actividades</span>
-            <button onClick={exportTodo} style={{ ...OB, color:"#4f46e5", borderColor:"#c7d2fe" }}>↓ Backup</button>
-            <label style={{ ...OB, cursor:"pointer" }}>
-              ↑ Restaurar
-              <input ref={fileInputRef} type="file" accept=".json" onChange={importTodo} style={{ display:"none" }}/>
-            </label>
+            {/* Mostrar usuario actual */}
+            {currentUser && (
+              <span style={{ fontSize:12, color:"#64748b", background:"#f1f5f9", border:"1px solid #e2e8f0", borderRadius:6, padding:"4px 10px" }}>
+                {currentUser.nombre}
+              </span>
+            )}
+            {!readOnly && <>
+              <span style={{ color:"#94a3b8", fontSize:12 }}>{alumnos.length} alumnos · {actividades.length} actividades</span>
+              <button onClick={exportTodo} style={{ ...OB, color:"#4f46e5", borderColor:"#c7d2fe" }}>↓ Backup</button>
+              <label style={{ ...OB, cursor:"pointer" }}>
+                ↑ Restaurar
+                <input ref={fileInputRef} type="file" accept=".json" onChange={importTodo} style={{ display:"none" }}/>
+              </label>
+            </>}
           </div>
         </div>
         <div style={{ display:"flex", marginTop:16 }}>
