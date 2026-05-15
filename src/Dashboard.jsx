@@ -603,7 +603,7 @@ function ImportacionMasiva({ onClose, onDone }) {
 
           {/* ── PASO 1: Entrada ── */}
           {paso === 1 && <>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
               <div>
                 <label style={{ fontSize:12, color:'#64748b', display:'block', marginBottom:4 }}>Rol para todos</label>
                 <select value={rol} onChange={e => setRol(e.target.value)} style={IS}>
@@ -612,13 +612,20 @@ function ImportacionMasiva({ onClose, onDone }) {
                   <option value="admin">Admin</option>
                 </select>
               </div>
-              <div style={{ gridColumn:'1/-1' }}>
+              <div>
                 <label style={{ fontSize:12, color:'#64748b', display:'block', marginBottom:4 }}>Grupo (opcional)</label>
-                <select value={grupoId} onChange={e => setGrupoId(e.target.value)} style={IS}>
-                  <option value=''>Sin grupo asignado</option>
+                <select
+                  value={grupoId}
+                  onChange={e => setGrupoId(e.target.value)}
+                  style={{ background:'#fff', border:'1px solid #cbd5e1', borderRadius:8,
+                    color:'#0f172a', padding:'8px 12px', fontSize:13, outline:'none',
+                    width:'100%', boxSizing:'border-box', cursor:'pointer' }}>
+                  <option value=''>-- Sin grupo --</option>
                   {grupos.map(c => (
-                    <optgroup key={c.id} label={`${c.codigo} — ${c.nombre}`}>
-                      {c.grupos.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
+                    <optgroup key={c.id} label={c.codigo + ' — ' + c.nombre}>
+                      {c.grupos.map(g => (
+                        <option key={g.id} value={String(g.id)}>{g.nombre}</option>
+                      ))}
                     </optgroup>
                   ))}
                 </select>
