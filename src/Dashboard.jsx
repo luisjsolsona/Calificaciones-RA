@@ -459,7 +459,7 @@ function UserManager({ onRefresh }) {
   const [filtroRol,   setFiltroRol]   = useState('');
   const [filtroGrupo, setFiltroGrupo] = useState('');
   const [form, setForm] = useState({
-    nombre:'', email:'', usuario:'', password:'', rol:'docente', alumno_nombre:'', grupo_id:'', ciclosSeleccionados:[], módulosSeleccionados:[]
+    nombre:'', email:'', usuario:'', password:'', rol:'docente', alumno_nombre:'', grupo_id:'', ciclosSeleccionados:[], gruposSeleccionados:[]
   });
 
   useEffect(() => {
@@ -511,7 +511,7 @@ function UserManager({ onRefresh }) {
       password: '', rol: u.rol, alumno_nombre: u.alumno_nombre||'',
       grupo_id: u.grupo_id ? String(u.grupo_id) : '',
       ciclosSeleccionados: (u.ciclos||[]).map(c => c.id),
-      módulosSeleccionados: (u.grupos_docente||[]).map(g => g.id)
+      gruposSeleccionados: (u.grupos_docente||[]).map(g => g.id)
     });
     setEditUser(u); setShowForm(true);
   }
