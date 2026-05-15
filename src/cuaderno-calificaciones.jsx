@@ -33,7 +33,7 @@ const initActividades = [
   { id:"A7", nombre:"Examen final",      tipo:"examen",    ras:["RA4"],       ud:"UD4", peso:50, orden:1, notas:{} },
 ];
 initActividades.forEach(act => {
-  initAlumnos.forEach(al => { act.notas[al.id] = Math.floor(Math.random()*5)+5; });
+  initAlumnos.forEach(al => { act.notas[al.id] = { nota: Math.floor(Math.random()*5)+5, obs:"" }; });
 });
 
 // ─── ICONO ───────────────────────────────────────────────────────────────────
@@ -196,12 +196,25 @@ function calcPesosRA(ras) {
   }
   return Object.fromEntries(ras.map(r=>[r.id,1/ras.length]));
 }
+// Helpers compatibles con formato { nota, obs } y con el número plano (datos anteriores)
+function getNota(notas, alumnoId) {
+  const v = notas?.[alumnoId];
+  if (v === null || v === undefined || v === "") return "";
+  if (typeof v === "object") return v.nota ?? "";
+  return v;
+}
+function getObs(notas, alumnoId) {
+  const v = notas?.[alumnoId];
+  if (typeof v === "object" && v !== null) return v.obs || "";
+  return "";
+}
+
 function mediaGrupo(grupo, alumnoId) {
-  const v = grupo.filter(a=>a.notas[alumnoId]!==""&&!isNaN(Number(a.notas[alumnoId])));
+  const v = grupo.filter(a => { const n=getNota(a.notas,alumnoId); return n!==""&&!isNaN(Number(n)); });
   if (!v.length) return null;
   const pt = v.reduce((s,a)=>s+Number(a.peso),0);
   if (!pt) return null;
-  return v.reduce((s,a)=>s+Number(a.notas[alumnoId])*Number(a.peso),0)/pt;
+  return v.reduce((s,a)=>s+Number(getNota(a.notas,alumnoId))*Number(a.peso),0)/pt;
 }
 function calcNotaRA(ra, alumnoId, actividades) {
   const acts  = actividades.filter(a=>a.ras.includes(ra.id)&&a.tipo==="actividad");
@@ -341,6 +354,33 @@ function UDCard({ ud, onUpdate, onRemove }) {
   );
 }
 
+// ─── EDITOR NOTA + OBSERVACIÓN (fuera del padre) ─────────────────────────────
+function NotaEditor({ nota, obs, onSave, onCancel }) {
+  const [n, setN] = useState(nota ?? "");
+  const [o, setO] = useState(obs || "");
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:6, padding:10,
+      background:"#eef2ff", border:"1px solid #4f46e5", borderRadius:10,
+      boxShadow:"0 4px 16px rgba(79,70,229,0.18)", minWidth:190, zIndex:10 }}
+      onClick={e=>e.stopPropagation()}>
+      <input type="number" min={0} max={10} step={0.1} value={n}
+        onChange={e=>setN(e.target.value)} autoFocus
+        placeholder="Nota (0-10)"
+        style={{ ...IS, padding:"5px 8px", fontSize:14, textAlign:"center" }}/>
+      <input value={o} onChange={e=>setO(e.target.value)}
+        placeholder="Observación..."
+        onKeyDown={e=>{ if(e.key==="Enter")onSave(n,o); if(e.key==="Escape")onCancel(); }}
+        style={{ ...IS, padding:"5px 8px", fontSize:12 }}/>
+      <div style={{ display:"flex", gap:6 }}>
+        <button onClick={()=>onSave(n,o)}
+          style={{ ...BS, flex:1, padding:"6px 0", fontSize:12 }}>✓ Guardar</button>
+        <button onClick={onCancel}
+          style={{ ...OB, padding:"6px 10px", fontSize:12 }}>✕</button>
+      </div>
+    </div>
+  );
+}
+
 // ─── FORMULARIO NUEVA ACTIVIDAD (fuera del padre → estado local) ─────────────
 function NuevaActividadForm({ ras, uds, alumnos, onAdd }) {
   const [nombre, setNombre] = useState("");
@@ -351,7 +391,7 @@ function NuevaActividadForm({ ras, uds, alumnos, onAdd }) {
 
   function submit() {
     if (!nombre.trim() || !rasArr.length) return;
-    const notas = Object.fromEntries(alumnos.map(a => [a.id, ""]));
+    const notas = Object.fromEntries(alumnos.map(a => [a.id, { nota:"", obs:"" }]));
     onAdd({ nombre: nombre.trim(), tipo, ras: rasArr, ud, peso: Number(peso), notas });
     setNombre(""); setTipo("actividad"); setRasArr([]); setUd(""); setPeso(50);
   }
@@ -570,7 +610,7 @@ export default function CuadernoCalificaciones({
 
   function handleImportActividades(text, mode) {
     const t = text.trim();
-    const notas0 = () => Object.fromEntries(alumnos.map(a=>[a.id,""]));
+    const notas0 = () => Object.fromEntries(alumnos.map(a=>[a.id,{nota:"",obs:""}]));
     let items = [];
     if (t.startsWith("[")) {
       try {
@@ -609,8 +649,8 @@ export default function CuadernoCalificaciones({
   // Alumno solo ve Resumen y su ficha
   const tabs = readOnly ? allTabs.filter(t => t.id==="resumen" || t.id==="alumno") : allTabs;
 
-  function saveNota(actId, alumnoId, val) {
-    setActividades(prev=>prev.map(a=>a.id===actId?{...a,notas:{...a.notas,[alumnoId]:val===""?"":Number(val)}}:a));
+  function saveNota(actId, alumnoId, nota, obs) {
+    setActividades(prev=>prev.map(a=>a.id===actId?{...a,notas:{...a.notas,[alumnoId]:{ nota:nota===""?"":Number(nota), obs:obs||"" }}}:a));
     setEditingNota(null);
   }
   function addAlumno() {
@@ -1027,15 +1067,20 @@ export default function CuadernoCalificaciones({
                         <span style={{ fontSize:10, background:"#eef2ff", color:"#4f46e5", border:"1px solid #c7d2fe", borderRadius:4, padding:"1px 5px" }}>{ra.id}</span>
                       </td>
                       {alumnos.map(al=>{
-                        const k=`${act.id}-${al.id}`, nota=act.notas[al.id];
+                        const k    = `${act.id}-${al.id}`;
+                        const nota = getNota(act.notas, al.id);
+                        const obs  = getObs(act.notas, al.id);
                         return (
-                          <td key={al.id} style={{ ...TD, textAlign:"center", cursor:readOnly?"default":"pointer" }} onClick={()=>!readOnly&&setEditingNota(k)}>
+                          <td key={al.id} style={{ ...TD, textAlign:"center", cursor:readOnly?"default":"pointer", verticalAlign:"middle" }}
+                            onClick={()=>!readOnly && editingNota!==k && setEditingNota(k)}>
                             {editingNota===k && !readOnly
-                              ? <input autoFocus type="number" min={0} max={10} step={0.1} defaultValue={nota}
-                                  onBlur={e=>saveNota(act.id,al.id,e.target.value)}
-                                  onKeyDown={e=>{ if(e.key==="Enter")saveNota(act.id,al.id,e.target.value); if(e.key==="Escape")setEditingNota(null); }}
-                                  style={{ width:52, textAlign:"center", background:"#fff", border:"1px solid #4f46e5", borderRadius:4, color:"#0f172a", padding:"2px 4px", fontSize:13 }}/>
-                              : notaBadge(nota)}
+                              ? <NotaEditor nota={nota} obs={obs}
+                                  onSave={(n,o)=>saveNota(act.id,al.id,n,o)}
+                                  onCancel={()=>setEditingNota(null)}/>
+                              : <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:3 }}>
+                                  {notaBadge(nota)}
+                                  {obs && <span title={obs} style={{ fontSize:13, cursor:"help" }}>💬</span>}
+                                </div>}
                           </td>
                         );
                       })}
@@ -1053,18 +1098,37 @@ export default function CuadernoCalificaciones({
 
   // ── POR ALUMNO ────────────────────────────────────────────────────────────
   function TabAlumno() {
-    const al = alumnos.find(a=>a.id===alumnoSel)||alumnos[0];
+    // Alumno solo ve su propio registro; docente/admin pueden elegir
+    const al = readOnly && currentUser?.alumnoNombre
+      ? (alumnos.find(a=>a.nombre===currentUser.alumnoNombre) || alumnos[0])
+      : (alumnos.find(a=>a.id===alumnoSel) || alumnos[0]);
     if (!al) return <p style={{ color:"#64748b" }}>No hay alumnos.</p>;
     const raData = ras.map(ra=>({ ra:ra.id, nota:calcNotaRA(ra,al.id,actividades)??0, fullMark:10 }));
     return (
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-        <div style={{ display:"flex", gap:12, alignItems:"center" }}>
-          <select value={al.id} onChange={e=>setAlumnoSel(Number(e.target.value))} style={{ ...IS, maxWidth:280 }}>
-            {alumnos.map(a=><option key={a.id} value={a.id}>{a.nombre}</option>)}
-          </select>
-          <span style={{ color:"#64748b", fontSize:13 }}>Calificación final:</span>
-          {notaBadge(calcNotaFinal(al.id,ras,actividades),"lg")}
-        </div>
+        {readOnly ? (
+          /* Vista alumno: sin selector, cabecera personalizada */
+          <div style={{ display:"flex", alignItems:"center", gap:14, background:"#eef2ff", border:"1px solid #c7d2fe", borderRadius:12, padding:"14px 18px" }}>
+            <span style={{ fontSize:26 }}>🎓</span>
+            <div style={{ flex:1 }}>
+              <div style={{ fontWeight:700, color:"#0f172a", fontSize:16 }}>{al.nombre}</div>
+              <div style={{ color:"#64748b", fontSize:12 }}>Tus calificaciones</div>
+            </div>
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <span style={{ color:"#64748b", fontSize:13 }}>Nota final:</span>
+              {notaBadge(calcNotaFinal(al.id,ras,actividades),"lg")}
+            </div>
+          </div>
+        ) : (
+          /* Vista docente/admin: selector de alumno */
+          <div style={{ display:"flex", gap:12, alignItems:"center" }}>
+            <select value={al.id} onChange={e=>setAlumnoSel(Number(e.target.value))} style={{ ...IS, maxWidth:280 }}>
+              {alumnos.map(a=><option key={a.id} value={a.id}>{a.nombre}</option>)}
+            </select>
+            <span style={{ color:"#64748b", fontSize:13 }}>Calificación final:</span>
+            {notaBadge(calcNotaFinal(al.id,ras,actividades),"lg")}
+          </div>
+        )}
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
           <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:16, boxShadow:SH }}>
             <h3 style={SL}>Perfil por RA</h3>
@@ -1116,18 +1180,23 @@ export default function CuadernoCalificaciones({
               </div>
               <table style={{ width:"100%", borderCollapse:"collapse" }}>
                 <thead><tr style={{ background:"#f1f5f9" }}>
-                  <th style={TH}>Actividad</th><th style={TH}>Tipo</th><th style={TH}>UD</th><th style={TH}>Peso</th><th style={TH}>Nota</th>
+                  <th style={TH}>Actividad</th><th style={TH}>Tipo</th><th style={TH}>UD</th><th style={TH}>Peso</th><th style={TH}>Nota</th><th style={{ ...TH, textAlign:"left" }}>Observación</th>
                 </tr></thead>
                 <tbody>
-                  {grupo.map((act,i)=>(
-                    <tr key={act.id} style={{ background:i%2===0?"#fff":"#f8fafc" }}>
-                      <td style={TD}>{act.nombre}</td>
-                      <td style={{ ...TD, textAlign:"center" }}>{tipoBadge(act.tipo)}</td>
-                      <td style={{ ...TD, textAlign:"center", color:"#64748b", fontSize:12 }}>{act.ud||"—"}</td>
-                      <td style={{ ...TD, textAlign:"center", color:"#94a3b8", fontSize:12 }}>{act.peso}%</td>
-                      <td style={{ ...TD, textAlign:"center" }}>{notaBadge(act.notas[al.id]===""?null:act.notas[al.id])}</td>
-                    </tr>
-                  ))}
+                  {grupo.map((act,i)=>{
+                    const nota = getNota(act.notas, al.id);
+                    const obs  = getObs(act.notas, al.id);
+                    return (
+                      <tr key={act.id} style={{ background:i%2===0?"#fff":"#f8fafc" }}>
+                        <td style={TD}>{act.nombre}</td>
+                        <td style={{ ...TD, textAlign:"center" }}>{tipoBadge(act.tipo)}</td>
+                        <td style={{ ...TD, textAlign:"center", color:"#64748b", fontSize:12 }}>{act.ud||"—"}</td>
+                        <td style={{ ...TD, textAlign:"center", color:"#94a3b8", fontSize:12 }}>{act.peso}%</td>
+                        <td style={{ ...TD, textAlign:"center" }}>{notaBadge(nota===""?null:nota)}</td>
+                        <td style={{ ...TD, color:"#64748b", fontSize:12 }}>{obs || <span style={{ color:"#cbd5e1" }}>—</span>}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
