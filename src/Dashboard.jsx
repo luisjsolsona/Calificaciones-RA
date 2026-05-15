@@ -35,25 +35,44 @@ function RoleBadge({ rol }) {
 function InscripcionesModal({ cuaderno, onClose }) {
   const [inscritos,    setInscritos]    = useState([]);
   const [todosAlumnos, setTodosAlumnos] = useState([]);
-  const [buscar,       setBuscar]       = useState("");
+  const [ciclos,       setCiclos]       = useState([]);
+  const [filtroGrupo,  setFiltroGrupo]  = useState('');
+  const [buscar,       setBuscar]       = useState('');
   const [loading,      setLoading]      = useState(true);
 
   useEffect(() => {
     Promise.all([
       api.getInscripciones(cuaderno.id),
       api.getUsuarios('alumno'),
-    ]).then(([ins, alumnos]) => {
+      api.getCiclos(),
+    ]).then(([ins, alumnos, cics]) => {
       setInscritos(ins);
       setTodosAlumnos(alumnos);
+      setCiclos(cics);
     }).finally(() => setLoading(false));
   }, [cuaderno.id]);
 
   const inscritosIds = new Set(inscritos.map(i => i.id));
-  const disponibles  = todosAlumnos.filter(a =>
-    !inscritosIds.has(a.id) &&
-    (!buscar || a.nombre.toLowerCase().includes(buscar.toLowerCase()) ||
-      (a.email || '').toLowerCase().includes(buscar.toLowerCase()))
-  );
+
+  const disponibles = todosAlumnos.filter(a => {
+    if (inscritosIds.has(a.id)) return false;
+    if (filtroGrupo) {
+      if (filtroGrupo.startsWith('c')) {
+        const cid = parseInt(filtroGrupo.slice(1));
+        const ciclo = ciclos.find(c => c.id === cid);
+        if (!ciclo) return false;
+        if (ciclo.grupos.length > 0) {
+          const grupoIds = new Set(ciclo.grupos.map(g => g.id));
+          if (!grupoIds.has(a.grupo_id)) return false;
+        }
+      } else {
+        if (String(a.grupo_id) !== filtroGrupo) return false;
+      }
+    }
+    if (buscar && !a.nombre.toLowerCase().includes(buscar.toLowerCase()) &&
+        !(a.email||'').toLowerCase().includes(buscar.toLowerCase())) return false;
+    return true;
+  });
 
   async function inscribir(alumno) {
     await api.inscribir(cuaderno.id, alumno.id);
@@ -68,11 +87,20 @@ function InscripcionesModal({ cuaderno, onClose }) {
   const IS = { background:"#fff", border:"1px solid #e2e8f0", borderRadius:8,
     padding:"8px 12px", fontSize:13, outline:"none", width:"100%", boxSizing:"border-box" };
 
+  // Opciones de filtro: ciclos y sus grupos
+  const opcionesFiltro = ciclos.flatMap(c => [
+    { value: 'c' + c.id, label: c.codigo + (c.nombre !== c.codigo ? ' — ' + c.nombre : ''), isCiclo: true },
+    ...c.grupos.map(g => ({ value: String(g.id), label: '  ' + g.nombre, isCiclo: false })),
+  ]);
+
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.4)",
       display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:16 }}>
-      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:560,
-        maxHeight:"85vh", display:"flex", flexDirection:"column", boxShadow:"0 20px 60px rgba(0,0,0,0.2)" }}>
+      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:580,
+        maxHeight:"85vh", display:"flex", flexDirection:"column",
+        boxShadow:"0 20px 60px rgba(0,0,0,0.2)" }}>
+
+        {/* Header */}
         <div style={{ padding:"20px 24px", borderBottom:"1px solid #e2e8f0",
           display:"flex", alignItems:"center", gap:12 }}>
           <div style={{ flex:1 }}>
@@ -82,12 +110,14 @@ function InscripcionesModal({ cuaderno, onClose }) {
             <p style={{ margin:0, fontSize:12, color:"#64748b" }}>{cuaderno.modulo} · {cuaderno.curso}</p>
           </div>
           <button onClick={onClose} style={{ background:"none", border:"1px solid #e2e8f0",
-            borderRadius:8, padding:"6px 12px", cursor:"pointer", color:"#64748b" }}>✕</button>
+            borderRadius:8, padding:"6px 12px", cursor:"pointer", color:"#64748b" }}>X</button>
         </div>
 
-        <div style={{ padding:"16px 24px", flex:1, overflowY:"auto", display:"flex", flexDirection:"column", gap:16 }}>
+        <div style={{ padding:"16px 24px", flex:1, overflowY:"auto",
+          display:"flex", flexDirection:"column", gap:16 }}>
           {loading ? <p style={{ color:"#94a3b8", textAlign:"center" }}>Cargando...</p> : <>
-            {/* Alumnos inscritos */}
+
+            {/* Inscritos */}
             <div>
               <h3 style={{ margin:"0 0 10px", fontSize:13, fontWeight:700, color:"#475569",
                 textTransform:"uppercase", letterSpacing:.5 }}>
@@ -101,7 +131,9 @@ function InscripcionesModal({ cuaderno, onClose }) {
                     <span style={{ fontSize:18 }}>🎓</span>
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:13, fontWeight:600, color:"#0f172a" }}>{al.nombre}</div>
-                      <div style={{ fontSize:11, color:"#94a3b8" }}>{al.email}</div>
+                      <div style={{ fontSize:11, color:"#94a3b8" }}>
+                        {al.email}{al.grupo_nombre ? ' · ' + al.grupo_nombre : ''}
+                      </div>
                     </div>
                     <button onClick={() => desinscribir(al)} style={{
                       background:"none", border:"1px solid #fca5a5", borderRadius:6,
@@ -113,17 +145,29 @@ function InscripcionesModal({ cuaderno, onClose }) {
               }
             </div>
 
-            {/* Alumnos disponibles */}
+            {/* Añadir alumnos con filtros */}
             <div>
               <h3 style={{ margin:"0 0 10px", fontSize:13, fontWeight:700, color:"#475569",
                 textTransform:"uppercase", letterSpacing:.5 }}>
                 Añadir alumnos
               </h3>
-              <input value={buscar} onChange={e => setBuscar(e.target.value)}
-                placeholder="Buscar alumno..." style={{ ...IS, marginBottom:10 }}/>
+              <div style={{ display:"flex", gap:8, marginBottom:10 }}>
+                <select value={filtroGrupo} onChange={e => setFiltroGrupo(e.target.value)}
+                  style={{ ...IS, flex:"0 0 auto", width:"auto", minWidth:140, cursor:"pointer" }}>
+                  <option value=''>Todos los grupos</option>
+                  {opcionesFiltro.map(o => (
+                    <option key={o.value} value={o.value}
+                      style={{ fontWeight: o.isCiclo ? 700 : 400, color: o.isCiclo ? '#4f46e5' : '#0f172a' }}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <input value={buscar} onChange={e => setBuscar(e.target.value)}
+                  placeholder="Buscar alumno..." style={IS}/>
+              </div>
               {disponibles.length === 0
                 ? <p style={{ color:"#94a3b8", fontSize:13 }}>
-                    {todosAlumnos.length === 0 ? "No hay alumnos creados en el sistema" : "Sin resultados"}
+                    {todosAlumnos.length === 0 ? "No hay alumnos en el sistema" : "Sin resultados"}
                   </p>
                 : disponibles.map(al => (
                   <div key={al.id} style={{ display:"flex", alignItems:"center", gap:10,
@@ -131,7 +175,9 @@ function InscripcionesModal({ cuaderno, onClose }) {
                     <span style={{ fontSize:18 }}>🎓</span>
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:13, color:"#0f172a" }}>{al.nombre}</div>
-                      <div style={{ fontSize:11, color:"#94a3b8" }}>{al.email}</div>
+                      <div style={{ fontSize:11, color:"#94a3b8" }}>
+                        {al.email}{al.grupo_nombre ? ' · ' + al.grupo_nombre : ''}
+                      </div>
                     </div>
                     <button onClick={() => inscribir(al)} style={{
                       background:"#4f46e5", border:"none", borderRadius:6,
@@ -148,6 +194,7 @@ function InscripcionesModal({ cuaderno, onClose }) {
     </div>
   );
 }
+
 
 // ── Tarjeta de cuaderno ────────────────────────────────────────────────────
 function CuadernoCard({ cuaderno, onClick, onDelete, onInscripciones, canManage }) {
@@ -888,7 +935,7 @@ export default function Dashboard({ cuadernos, setCuadernos, currentUser, onOpen
               </button>
               {rol === "admin" && (
                 <>
-                  <button onClick={()=>setShowUsuarios(v=>!v)} style={{
+                  <button onClick={()=>{ setShowUsuarios(v=>!v); setShowCiclos(false); }} style={{
                     background:showUsuarios?"#1e1b4b":"#fff",
                     color:showUsuarios?"#fff":"#4f46e5",
                     border:`1px solid ${showUsuarios?"#1e1b4b":"#c7d2fe"}`,
@@ -901,7 +948,7 @@ export default function Dashboard({ cuadernos, setCuadernos, currentUser, onOpen
                     borderRadius:9, padding:"10px 18px", fontSize:13, fontWeight:600, cursor:"pointer" }}>
                     Importar masivo
                   </button>
-                  <button onClick={()=>setShowCiclos(v=>!v)} style={{
+                  <button onClick={()=>{ setShowCiclos(v=>!v); setShowUsuarios(false); }} style={{
                     background:showCiclos?"#1e1b4b":"#fff",
                     color:showCiclos?"#fff":"#7c3aed",
                     border:`1px solid ${showCiclos?"#1e1b4b":"#ddd6fe"}`,
