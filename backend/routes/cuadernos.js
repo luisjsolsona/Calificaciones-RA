@@ -22,9 +22,8 @@ router.get('/', auth(), (req, res) => {
       .map(c => ({ ...c, puedo_editar: true, es_apoyo: false }));
 
   } else if (rol === 'docente') {
-    // Mi ciclo
-    const me = db.prepare('SELECT ciclo_id FROM usuarios WHERE id=?').get(id);
-    const miCiclo = me?.ciclo_id || null;
+    // Mis ciclos (puede ser varios)
+    const misCiclos = db.prepare('SELECT ciclo_id FROM docente_ciclos WHERE docente_id=?').all(id).map(r => r.ciclo_id);
 
     // Mis cuadernos (titular) + apoyo
     const propios = db.prepare(`
@@ -38,15 +37,20 @@ router.get('/', auth(), (req, res) => {
 
     const propiosIds = new Set(propios.map(c => c.id));
 
-    // Cuadernos del mismo ciclo (solo lectura)
+    // Cuadernos de compañeros del mismo ciclo (solo lectura)
     let ciclo = [];
-    if (miCiclo) {
+    if (misCiclos.length > 0) {
+      const ph = misCiclos.map(() => '?').join(',');
       ciclo = db.prepare(`
         SELECT ${COLS}, 0 as puedo_editar, 0 as es_apoyo
         FROM cuadernos c JOIN usuarios u ON c.docente_id=u.id
-        WHERE u.ciclo_id=? AND c.docente_id!=?
+        WHERE c.docente_id != ?
+          AND EXISTS(
+            SELECT 1 FROM docente_ciclos dc2
+            WHERE dc2.docente_id=u.id AND dc2.ciclo_id IN (${ph})
+          )
         ORDER BY c.updated_at DESC
-      `).all(miCiclo, id).filter(c => !propiosIds.has(c.id));
+      `).all(id, ...misCiclos).filter(c => !propiosIds.has(c.id));
     }
 
     rows = [...propios, ...ciclo];
@@ -85,9 +89,9 @@ router.get('/:id', auth(), (req, res) => {
   else if (rol === 'docente') {
     canEdit = puedeEditar(c.id, id);
     if (!canEdit) {
-      const me = db.prepare('SELECT ciclo_id FROM usuarios WHERE id=?').get(id);
-      const owner = db.prepare('SELECT ciclo_id FROM usuarios WHERE id=?').get(c.docente_id);
-      canView = me?.ciclo_id && me.ciclo_id === owner?.ciclo_id;
+      const misCiclos  = db.prepare('SELECT ciclo_id FROM docente_ciclos WHERE docente_id=?').all(id).map(r => r.ciclo_id);
+      const susCiclos  = db.prepare('SELECT ciclo_id FROM docente_ciclos WHERE docente_id=?').all(c.docente_id).map(r => r.ciclo_id);
+      canView = misCiclos.some(cid => susCiclos.includes(cid));
     } else { canView = true; }
   } else if (rol === 'alumno') {
     canView = !!db.prepare('SELECT id FROM inscripciones WHERE alumno_id=? AND cuaderno_id=?').get(id, c.id);

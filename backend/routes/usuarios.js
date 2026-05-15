@@ -6,10 +6,19 @@ const auth   = require('../middleware/auth');
 // GET /api/usuarios
 router.get('/', auth(['admin', 'docente']), (req, res) => {
   const { rol } = req.query;
+  // Helper para enriquecer usuarios con sus ciclos
+  function enriquecer(users) {
+    return users.map(u => ({
+      ...u,
+      ciclos: db.prepare(
+        'SELECT c.id,c.codigo,c.nombre FROM docente_ciclos dc JOIN ciclos c ON dc.ciclo_id=c.id WHERE dc.docente_id=? ORDER BY c.codigo'
+      ).all(u.id),
+    }));
+  }
   const rows = rol
     ? db.prepare('SELECT u.id,u.email,u.usuario,u.nombre,u.rol,u.alumno_nombre,u.grupo_id,g.nombre as grupo_nombre,u.ciclo_id,c.codigo as ciclo_codigo,u.created_at FROM usuarios u LEFT JOIN grupos g ON u.grupo_id=g.id LEFT JOIN ciclos c ON u.ciclo_id=c.id WHERE u.rol=? ORDER BY u.nombre').all(rol)
     : db.prepare('SELECT u.id,u.email,u.usuario,u.nombre,u.rol,u.alumno_nombre,u.grupo_id,g.nombre as grupo_nombre,u.ciclo_id,c.codigo as ciclo_codigo,u.created_at FROM usuarios u LEFT JOIN grupos g ON u.grupo_id=g.id LEFT JOIN ciclos c ON u.ciclo_id=c.id ORDER BY u.nombre').all();
-  res.json(rows);
+  res.json(enriquecer(rows));
 });
 
 // POST /api/usuarios
@@ -56,6 +65,15 @@ router.delete('/:id', auth(['admin']), (req, res) => {
   db.prepare('DELETE FROM inscripciones WHERE alumno_id=?').run(req.params.id);
   db.prepare('DELETE FROM cuadernos WHERE docente_id=?').run(req.params.id);
   db.prepare('DELETE FROM usuarios WHERE id=?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+// PUT /api/usuarios/:id/ciclos — reemplaza todos los ciclos del docente
+router.put('/:id/ciclos', auth(['admin']), (req, res) => {
+  const { ciclos } = req.body; // array de ciclo_id
+  db.prepare('DELETE FROM docente_ciclos WHERE docente_id=?').run(req.params.id);
+  const ins = db.prepare('INSERT OR IGNORE INTO docente_ciclos(docente_id,ciclo_id) VALUES(?,?)');
+  (ciclos || []).forEach(cid => ins.run(req.params.id, cid));
   res.json({ ok: true });
 });
 

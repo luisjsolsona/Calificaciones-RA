@@ -62,6 +62,22 @@ db.exec(`
 try { db.exec('ALTER TABLE usuarios ADD COLUMN grupo_id INTEGER REFERENCES grupos(id)'); } catch(_) {}
 try { db.exec('ALTER TABLE usuarios ADD COLUMN ciclo_id INTEGER REFERENCES ciclos(id)'); } catch(_) {}
 
+// Ciclos de cada docente (many-to-many)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS docente_ciclos (
+    docente_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    ciclo_id   INTEGER NOT NULL REFERENCES ciclos(id)  ON DELETE CASCADE,
+    PRIMARY KEY (docente_id, ciclo_id)
+  );
+`);
+
+// Migrar ciclo_id existente a docente_ciclos
+const sinMigrar = db.prepare(
+  'SELECT id, ciclo_id FROM usuarios WHERE ciclo_id IS NOT NULL AND id NOT IN (SELECT docente_id FROM docente_ciclos)'
+).all();
+const ins = db.prepare('INSERT OR IGNORE INTO docente_ciclos(docente_id,ciclo_id) VALUES(?,?)');
+for (const u of sinMigrar) ins.run(u.id, u.ciclo_id);
+
 // Docentes adicionales por cuaderno
 db.exec(`
   CREATE TABLE IF NOT EXISTS cuaderno_docentes (

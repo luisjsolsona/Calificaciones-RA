@@ -459,7 +459,7 @@ function UserManager({ onRefresh }) {
   const [filtroRol,   setFiltroRol]   = useState('');
   const [filtroGrupo, setFiltroGrupo] = useState('');
   const [form, setForm] = useState({
-    nombre:'', email:'', usuario:'', password:'', rol:'docente', alumno_nombre:'', grupo_id:'', ciclo_id:''
+    nombre:'', email:'', usuario:'', password:'', rol:'docente', alumno_nombre:'', grupo_id:'', ciclosSeleccionados:[]
   });
 
   useEffect(() => {
@@ -509,7 +509,7 @@ function UserManager({ onRefresh }) {
       nombre: u.nombre, email: u.email, usuario: u.usuario||'',
       password: '', rol: u.rol, alumno_nombre: u.alumno_nombre||'',
       grupo_id: u.grupo_id ? String(u.grupo_id) : '',
-      ciclo_id: u.ciclo_id ? String(u.ciclo_id) : ''
+      ciclosSeleccionados: (u.ciclos||[]).map(c => c.id)
     });
     setEditUser(u); setShowForm(true);
   }
@@ -522,7 +522,6 @@ function UserManager({ onRefresh }) {
         ...form,
         alumno_nombre: form.rol === 'alumno' ? (form.alumno_nombre || form.nombre) : null,
         grupo_id: form.grupo_id && !String(form.grupo_id).startsWith('c') ? Number(form.grupo_id) : null,
-        ciclo_id: form.ciclo_id ? Number(form.ciclo_id) : null,
       };
       if (editUser) {
         await api.updateUsuario(editUser.id, payload);
@@ -630,13 +629,29 @@ function UserManager({ onRefresh }) {
               ))}
             </select>
             {(form.rol === 'docente' || form.rol === 'admin') && (
-              <select value={form.ciclo_id} onChange={e=>setForm(p=>({...p,ciclo_id:e.target.value}))}
-                style={{ ...IS, cursor:'pointer' }}>
-                <option value=''>Ciclo del docente</option>
-                {ciclos.map(c => (
-                  <option key={c.id} value={String(c.id)}>{c.codigo} — {c.nombre}</option>
-                ))}
-              </select>
+              <div style={{ ...IS, padding:'6px 10px', minHeight:38 }}>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:4, marginBottom: ciclos.filter(c=>!form.ciclosSeleccionados.includes(c.id)).length ? 6 : 0 }}>
+                  {form.ciclosSeleccionados.map(cid => {
+                    const c = ciclos.find(x=>x.id===cid);
+                    return c ? (
+                      <span key={cid} style={{ background:'#f5f3ff', color:'#7c3aed', border:'1px solid #ddd6fe',
+                        borderRadius:20, padding:'2px 8px', fontSize:11, display:'flex', alignItems:'center', gap:4 }}>
+                        {c.codigo}
+                        <button type='button' onClick={()=>setForm(p=>({...p,ciclosSeleccionados:p.ciclosSeleccionados.filter(x=>x!==cid)}))}
+                          style={{ background:'none', border:'none', cursor:'pointer', color:'#94a3b8', padding:0, fontSize:11, lineHeight:1 }}>x</button>
+                      </span>
+                    ) : null;
+                  })}
+                  {form.ciclosSeleccionados.length === 0 && <span style={{ color:'#94a3b8', fontSize:12 }}>Ciclos del docente (ninguno)</span>}
+                </div>
+                <select value='' onChange={e=>{ const v=Number(e.target.value); if(v&&!form.ciclosSeleccionados.includes(v)) setForm(p=>({...p,ciclosSeleccionados:[...p.ciclosSeleccionados,v]})); }}
+                  style={{ border:'none', background:'transparent', fontSize:12, color:'#4f46e5', cursor:'pointer', outline:'none' }}>
+                  <option value=''>+ Añadir ciclo...</option>
+                  {ciclos.filter(c=>!form.ciclosSeleccionados.includes(c.id)).map(c=>(
+                    <option key={c.id} value={c.id}>{c.codigo} — {c.nombre}</option>
+                  ))}
+                </select>
+              </div>
             )}
             {form.rol === 'alumno' && (
               <input style={{ ...IS, gridColumn:'1/-1' }} value={form.alumno_nombre}
@@ -691,9 +706,11 @@ function UserManager({ onRefresh }) {
                     </span>
                   </td>
                   <td style={{ padding:'9px 12px', fontSize:12 }}>
-                    {u.ciclo_codigo
-                      ? <span style={{ background:'#f5f3ff', color:'#7c3aed', border:'1px solid #ddd6fe',
-                          borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700 }}>{u.ciclo_codigo}</span>
+                    {(u.ciclos||[]).length > 0
+                      ? (u.ciclos||[]).map(c => (
+                          <span key={c.id} style={{ background:'#f5f3ff', color:'#7c3aed', border:'1px solid #ddd6fe',
+                            borderRadius:6, padding:'2px 6px', fontSize:10, fontWeight:700, marginRight:3 }}>{c.codigo}</span>
+                        ))
                       : <span style={{ color:'#cbd5e1' }}>—</span>}
                   </td>
                   <td style={{ padding:'9px 12px', fontSize:12 }}>
