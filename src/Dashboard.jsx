@@ -384,6 +384,118 @@ function UserManager({ onRefresh }) {
 }
 
 
+
+// ── Gestión de Ciclos y Grupos ────────────────────────────────────────────
+function CiclosManager({ onCiclosChange }) {
+  const [ciclos,    setCiclos]    = useState([]);
+  const [newCiclo,  setNewCiclo]  = useState({ nombre:'', codigo:'' });
+  const [newGrupo,  setNewGrupo]  = useState({});  // { [cicloId]: nombre }
+
+  useEffect(() => { api.getCiclos().then(setCiclos).catch(console.error); }, []);
+
+  useEffect(() => { api.getCiclos().then(setGrupos).catch(()=>{}); }, []);
+
+  const allGrupos = grupos.flatMap(c => c.grupos.map(g => ({ ...g, ciclo: c.codigo })));
+
+  const IS = { background:'#fff', border:'1px solid #cbd5e1', borderRadius:8,
+    color:'#0f172a', padding:'7px 10px', fontSize:13, outline:'none', boxSizing:'border-box' };
+
+  async function addCiclo() {
+    if (!newCiclo.nombre.trim() || !newCiclo.codigo.trim()) return;
+    try {
+      const c = await api.createCiclo(newCiclo);
+      const lista = [...ciclos, c];
+      setCiclos(lista);
+      setNewCiclo({ nombre:'', codigo:'' });
+      if (onCiclosChange) onCiclosChange(lista);
+    } catch(e) { alert(e.message); }
+  }
+
+  async function delCiclo(id) {
+    if (!confirm('Eliminar ciclo y todos sus grupos?')) return;
+    await api.deleteCiclo(id);
+    const lista = ciclos.filter(c => c.id !== id);
+    setCiclos(lista);
+    if (onCiclosChange) onCiclosChange(lista);
+  }
+
+  async function addGrupo(cicloId) {
+    const nombre = (newGrupo[cicloId] || '').trim();
+    if (!nombre) return;
+    try {
+      const g = await api.createGrupo(cicloId, { nombre });
+      const lista = ciclos.map(c => c.id === cicloId ? { ...c, grupos: [...c.grupos, g] } : c);
+      setCiclos(lista);
+      setNewGrupo(prev => ({ ...prev, [cicloId]: '' }));
+      if (onCiclosChange) onCiclosChange(lista);
+    } catch(e) { alert(e.message); }
+  }
+
+  async function delGrupo(cicloId, grupoId) {
+    await api.deleteGrupo(grupoId);
+    const lista = ciclos.map(c => c.id === cicloId ? { ...c, grupos: c.grupos.filter(g => g.id !== grupoId) } : c);
+    setCiclos(lista);
+    if (onCiclosChange) onCiclosChange(lista);
+  }
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <h3 style={{ margin:0, fontSize:15, fontWeight:700 }}>Ciclos y Grupos</h3>
+      </div>
+
+      {/* Añadir ciclo */}
+      <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+        <input value={newCiclo.codigo} onChange={e=>setNewCiclo(p=>({...p,codigo:e.target.value}))}
+          placeholder="COD (SMR, IFC...)" style={{ ...IS, width:120 }}/>
+        <input value={newCiclo.nombre} onChange={e=>setNewCiclo(p=>({...p,nombre:e.target.value}))}
+          onKeyDown={e=>e.key==='Enter'&&addCiclo()}
+          placeholder="Nombre del ciclo" style={{ ...IS, flex:1 }}/>
+        <button onClick={addCiclo} style={{ background:'#4f46e5', color:'#fff', border:'none',
+          borderRadius:8, padding:'8px 16px', fontSize:13, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap' }}>
+          + Ciclo
+        </button>
+      </div>
+
+      {ciclos.length === 0
+        ? <p style={{ color:'#94a3b8', fontSize:13 }}>No hay ciclos. Crea el primero.</p>
+        : ciclos.map(ciclo => (
+          <div key={ciclo.id} style={{ border:'1px solid #e2e8f0', borderRadius:10, overflow:'hidden' }}>
+            {/* Cabecera ciclo */}
+            <div style={{ background:'#f1f5f9', padding:'10px 14px', display:'flex', alignItems:'center', gap:10 }}>
+              <span style={{ background:'#4f46e5', color:'#fff', borderRadius:6,
+                padding:'2px 10px', fontWeight:800, fontSize:13 }}>{ciclo.codigo}</span>
+              <span style={{ flex:1, fontWeight:600, fontSize:14, color:'#0f172a' }}>{ciclo.nombre}</span>
+              <span style={{ fontSize:12, color:'#94a3b8' }}>{ciclo.grupos.length} grupos</span>
+              <button onClick={()=>delCiclo(ciclo.id)} style={{ background:'none', border:'1px solid #fca5a5',
+                borderRadius:6, color:'#dc2626', padding:'3px 10px', fontSize:12, cursor:'pointer' }}>✕ Eliminar</button>
+            </div>
+            {/* Grupos */}
+            <div style={{ padding:'10px 14px', display:'flex', flexWrap:'wrap', gap:8, alignItems:'center' }}>
+              {ciclo.grupos.map(g => (
+                <span key={g.id} style={{ background:'#eef2ff', color:'#4f46e5', border:'1px solid #c7d2fe',
+                  borderRadius:20, padding:'4px 12px', fontSize:13, display:'flex', alignItems:'center', gap:6 }}>
+                  {g.nombre}
+                  <button onClick={()=>delGrupo(ciclo.id,g.id)} style={{ background:'none', border:'none',
+                    color:'#94a3b8', cursor:'pointer', padding:0, fontSize:12, lineHeight:1 }}>✕</button>
+                </span>
+              ))}
+              <div style={{ display:'flex', gap:6 }}>
+                <input value={newGrupo[ciclo.id]||''} placeholder="Nuevo grupo..."
+                  onChange={e=>setNewGrupo(p=>({...p,[ciclo.id]:e.target.value}))}
+                  onKeyDown={e=>e.key==='Enter'&&addGrupo(ciclo.id)}
+                  style={{ ...IS, width:140, padding:'4px 8px', fontSize:12 }}/>
+                <button onClick={()=>addGrupo(ciclo.id)} style={{ background:'#e0e7ff', color:'#4f46e5',
+                  border:'1px solid #c7d2fe', borderRadius:7, padding:'4px 12px', fontSize:12, cursor:'pointer' }}>+ Grupo</button>
+              </div>
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  );
+}
+
 // ── Importación masiva de usuarios ────────────────────────────────────────
 function normalizar(str) {
   return str.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -407,6 +519,8 @@ function generarUsuario(nombre) {
 }
 
 function ImportacionMasiva({ onClose, onDone }) {
+  const [grupos,   setGrupos]   = useState([]);
+  const [grupoId,  setGrupoId]  = useState('');
   const [texto,    setTexto]    = useState('');
   const [rol,      setRol]      = useState('alumno');
   const [dominio,  setDominio]  = useState('@centro.es');
@@ -429,7 +543,7 @@ function ImportacionMasiva({ onClose, onDone }) {
       const usuario = partes[1] || generarUsuario(nombre);
       const email   = partes[2] || (usuario + dominio);
       const alumno_nombre = rol === 'alumno' ? nombre : null;
-      return { nombre, usuario, email, rol, password, alumno_nombre, _idx: i };
+      return { nombre, usuario, email, rol, password, alumno_nombre, grupo_id: grupoId || null, _idx: i };
     });
     setPreview(lista);
     setPaso(2);
@@ -497,6 +611,17 @@ function ImportacionMasiva({ onClose, onDone }) {
                   <option value="alumno">Alumno</option>
                   <option value="docente">Docente</option>
                   <option value="admin">Admin</option>
+                </select>
+              </div>
+              <div style={{ gridColumn:'1/-1' }}>
+                <label style={{ fontSize:12, color:'#64748b', display:'block', marginBottom:4 }}>Grupo (opcional)</label>
+                <select value={grupoId} onChange={e => setGrupoId(e.target.value)} style={IS}>
+                  <option value=''>Sin grupo asignado</option>
+                  {grupos.map(c => (
+                    <optgroup key={c.id} label={`${c.codigo} — ${c.nombre}`}>
+                      {c.grupos.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
+                    </optgroup>
+                  ))}
                 </select>
               </div>
               <div>
@@ -665,6 +790,7 @@ export default function Dashboard({ cuadernos, setCuadernos, currentUser, onOpen
   const [showNuevo,    setShowNuevo]    = useState(false);
   const [showUsuarios, setShowUsuarios] = useState(false);
   const [showImport,   setShowImport]   = useState(false);
+  const [showCiclos,   setShowCiclos]   = useState(false);
   const [inscModal,    setInscModal]    = useState(null); // cuaderno seleccionado
   const [docentes,     setDocentes]     = useState([]);
 
@@ -766,7 +892,14 @@ export default function Dashboard({ cuadernos, setCuadernos, currentUser, onOpen
                     background:"#fff", color:"#059669",
                     border:"1px solid #a7f3d0",
                     borderRadius:9, padding:"10px 18px", fontSize:13, fontWeight:600, cursor:"pointer" }}>
-                    ⬆ Importar masivo
+                    Importar masivo
+                  </button>
+                  <button onClick={()=>setShowCiclos(v=>!v)} style={{
+                    background:showCiclos?"#1e1b4b":"#fff",
+                    color:showCiclos?"#fff":"#7c3aed",
+                    border:`1px solid ${showCiclos?"#1e1b4b":"#ddd6fe"}`,
+                    borderRadius:9, padding:"10px 18px", fontSize:13, fontWeight:600, cursor:"pointer" }}>
+                    Ciclos y Grupos
                   </button>
                 </>
               )}
@@ -783,6 +916,12 @@ export default function Dashboard({ cuadernos, setCuadernos, currentUser, onOpen
             {showUsuarios && rol === "admin" && (
               <div style={{ marginBottom:28 }}>
                 <UserManager onRefresh={() => api.getUsuarios('docente').then(setDocentes)}/>
+              </div>
+            )}
+
+            {showCiclos && rol === "admin" && (
+              <div style={{ marginBottom:28 }}>
+                <CiclosManager onCiclosChange={()=>{}}/>
               </div>
             )}
 

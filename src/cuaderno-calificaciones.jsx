@@ -626,10 +626,10 @@ export default function CuadernoCalificaciones({
   const readOnly = role === "alumno";
 
   const [tab, setTab]                 = useState("resumen");
-  const [alumnos, setAlumnos]         = useState(initialData?.alumnos     || initAlumnos);
-  const [ras, setRAs]                 = useState(initialData?.ras         || initRAs);
-  const [uds, setUDs]                 = useState(initialData?.uds         || initUDs);
-  const [actividades, setActividades] = useState(initialData?.actividades || initActividades);
+  const [alumnos, setAlumnos]         = useState(initialData?.alumnos     || []);
+  const [ras, setRAs]                 = useState(initialData?.ras         || []);
+  const [uds, setUDs]                 = useState(initialData?.uds         || []);
+  const [actividades, setActividades] = useState(initialData?.actividades || []);
   const [alumnoSel, setAlumnoSel]     = useState(null);
   const [editingNota, setEditingNota] = useState(null);
   const [nuevoAlumno, setNuevoAlumno] = useState("");

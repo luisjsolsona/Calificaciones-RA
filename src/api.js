@@ -35,4 +35,9 @@ export const api = {
   updateUsuario:    (id, data)         => req('PUT',    `/usuarios/${id}`, data),
   deleteUsuario:    (id)               => req('DELETE', `/usuarios/${id}`),
   changePassword:   (id, password)     => req('PUT',    `/usuarios/${id}/password`, { password }),
+  getCiclos:        ()                 => req('GET',    '/ciclos'),
+  createCiclo:      (data)             => req('POST',   '/ciclos', data),
+  deleteCiclo:      (id)               => req('DELETE', `/ciclos/${id}`),
+  createGrupo:      (cicloId, data)    => req('POST',   `/ciclos/${cicloId}/grupos`, data),
+  deleteGrupo:      (id)               => req('DELETE', `/ciclos/grupo/${id}`),
 };

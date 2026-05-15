@@ -43,4 +43,23 @@ if (!db.prepare('SELECT id FROM usuarios WHERE email=?').get('admin@centro.es'))
   console.log('Admin creado: admin / admin1234');
 }
 
+// Ciclos y grupos
+db.exec(`
+  CREATE TABLE IF NOT EXISTS ciclos (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre  TEXT NOT NULL,
+    codigo  TEXT UNIQUE NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS grupos (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    ciclo_id  INTEGER REFERENCES ciclos(id) ON DELETE CASCADE,
+    nombre    TEXT NOT NULL,
+    UNIQUE(ciclo_id, nombre)
+  );
+`);
+
+// Añadir grupo_id a usuarios si no existe
+try { db.exec('ALTER TABLE usuarios ADD COLUMN grupo_id INTEGER REFERENCES grupos(id)'); } catch(_) {}
+
 module.exports = db;
+
